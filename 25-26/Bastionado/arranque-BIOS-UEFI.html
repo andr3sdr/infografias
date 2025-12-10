@@ -1,0 +1,571 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simulador de Secuencia de Arranque: BIOS vs UEFI</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;600&display=swap');
+        
+        body { font-family: 'Inter', sans-serif; }
+        .font-mono { font-family: 'Fira Code', monospace; }
+        
+        .step-card {
+            transition: all 0.3s ease;
+        }
+        .step-active {
+            border-color: #3b82f6;
+            background-color: rgba(59, 130, 246, 0.1);
+            transform: scale(1.02);
+        }
+        /* Scan line animation for Secure Boot */
+        .scan-line {
+            width: 100%;
+            height: 2px;
+            background: #10b981;
+            position: absolute;
+            top: 0;
+            left: 0;
+            animation: scan 2s infinite linear;
+            display: none;
+            box-shadow: 0 0 10px #10b981;
+        }
+        @keyframes scan {
+            0% { top: 0; opacity: 0; }
+            10% { opacity: 1; }
+            90% { opacity: 1; }
+            100% { top: 100%; opacity: 0; }
+        }
+        .scanning .scan-line { display: block; }
+
+        /* Console Log Styles */
+        .console-line {
+            opacity: 0;
+            animation: fadeIn 0.3s forwards;
+            cursor: pointer;
+            transition: background-color 0.2s;
+            border-left: 2px solid transparent;
+        }
+        .console-line:hover {
+            background-color: rgba(255, 255, 255, 0.1);
+            border-left: 2px solid #60a5fa;
+            padding-left: 4px;
+        }
+        @keyframes fadeIn {
+            to { opacity: 1; }
+        }
+
+        /* Custom Scrollbar for console */
+        #console-output::-webkit-scrollbar {
+            width: 8px;
+        }
+        #console-output::-webkit-scrollbar-track {
+            background: #0f172a; 
+        }
+        #console-output::-webkit-scrollbar-thumb {
+            background: #334155; 
+            border-radius: 4px;
+        }
+        #console-output::-webkit-scrollbar-thumb:hover {
+            background: #475569; 
+        }
+    </style>
+</head>
+<body class="bg-slate-900 text-slate-100 min-h-screen flex flex-col items-center p-4">
+
+    <!-- Header -->
+    <header class="w-full max-w-6xl mb-6 flex justify-between items-center">
+        <div>
+            <h1 class="text-3xl font-bold text-blue-400 mb-1">Secuencia de Arranque del PC</h1>
+            <p class="text-slate-400 text-sm">Simulación Técnica: BIOS Legacy (16-bit) vs UEFI (64-bit)</p>
+        </div>
+        <div class="text-xs text-slate-500 text-right hidden md:block">
+            <p>Módulo de Bastionado</p>
+            <p>Seguridad en Sistemas Operativos</p>
+        </div>
+    </header>
+
+    <!-- Main Interface -->
+    <main class="w-full max-w-6xl grid grid-cols-1 lg:grid-cols-12 gap-6 relative">
+        
+        <!-- INFO MODAL (Floating Screen) -->
+        <div id="info-modal" class="fixed inset-0 z-[100] hidden items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+            <div class="bg-slate-800 border border-slate-600 rounded-xl shadow-2xl max-w-lg w-full transform transition-all scale-100">
+                <div class="p-6">
+                    <div class="flex justify-between items-start mb-4">
+                        <div class="flex items-center gap-3">
+                            <div class="p-2 bg-blue-500/20 rounded-lg text-blue-400">
+                                <i data-lucide="info" class="w-6 h-6"></i>
+                            </div>
+                            <h3 class="text-lg font-bold text-white">Detalle del Log</h3>
+                        </div>
+                        <button onclick="closeModal()" class="text-slate-400 hover:text-white transition">
+                            <i data-lucide="x" class="w-6 h-6"></i>
+                        </button>
+                    </div>
+                    
+                    <div class="bg-black/50 p-3 rounded mb-4 font-mono text-xs text-green-400 border border-slate-700 break-all" id="modal-log-code">
+                        > READING SECTOR 0...
+                    </div>
+                    
+                    <div class="text-slate-300 text-sm leading-relaxed space-y-3" id="modal-description">
+                        <!-- Description injected here -->
+                    </div>
+                </div>
+                <div class="bg-slate-900/50 p-4 border-t border-slate-700 flex justify-end rounded-b-xl">
+                    <button onclick="closeModal()" class="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white text-sm font-medium rounded transition">
+                        Entendido
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Left Panel: Controls (3 cols) -->
+        <div class="lg:col-span-3 space-y-4">
+            <div class="bg-slate-800 rounded-xl shadow-lg border border-slate-700 p-6">
+                <h2 class="text-xl font-semibold mb-4 text-white">Configuración</h2>
+                
+                <!-- Mode Selector -->
+                <div class="mb-6">
+                    <label class="block text-xs uppercase tracking-wide text-slate-500 font-bold mb-2">Firmware</label>
+                    <div class="flex flex-col gap-2">
+                        <button onclick="setMode('bios')" id="btn-bios" class="w-full px-4 py-3 rounded text-left flex items-center gap-3 transition-all border border-transparent">
+                            <div class="w-3 h-3 rounded-full bg-yellow-500"></div>
+                            <div>
+                                <span class="block font-bold text-sm">BIOS Legacy</span>
+                                <span class="block text-xs opacity-70">CSM / MBR / 16-bit</span>
+                            </div>
+                        </button>
+                        <button onclick="setMode('uefi')" id="btn-uefi" class="w-full px-4 py-3 rounded text-left flex items-center gap-3 transition-all border border-transparent">
+                            <div class="w-3 h-3 rounded-full bg-blue-500"></div>
+                            <div>
+                                <span class="block font-bold text-sm">UEFI Moderno</span>
+                                <span class="block text-xs opacity-70">GPT / Secure Boot / 64-bit</span>
+                            </div>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Status Panel -->
+                <div class="mb-6 p-4 bg-slate-900 rounded-lg border border-slate-700">
+                    <h3 class="text-xs font-bold uppercase text-slate-500 mb-3">Parámetros Críticos</h3>
+                    <ul class="space-y-3 text-xs font-mono">
+                        <li class="flex justify-between items-center">
+                            <span class="text-slate-400">Address Space:</span>
+                            <span id="cpu-mode" class="text-yellow-400 bg-yellow-400/10 px-2 py-0.5 rounded">1 MB</span>
+                        </li>
+                        <li class="flex justify-between items-center">
+                            <span class="text-slate-400">Partition Table:</span>
+                            <span id="partition-type" class="text-slate-300">MBR</span>
+                        </li>
+                        <li class="flex justify-between items-center">
+                            <span class="text-slate-400">Root of Trust:</span>
+                            <span id="secure-boot-status" class="text-red-400">None</span>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+
+            <!-- Controls -->
+            <div class="bg-slate-800 rounded-xl shadow-lg border border-slate-700 p-6">
+                <button id="next-btn" onclick="nextStep()" class="w-full py-3 bg-green-600 hover:bg-green-500 text-white font-bold rounded-lg shadow-lg transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed mb-2">
+                    <span>Iniciar Power On</span>
+                    <i data-lucide="power" class="w-4 h-4"></i>
+                </button>
+                <button id="reset-btn" onclick="resetSim()" class="w-full py-2 bg-slate-700 hover:bg-slate-600 text-slate-300 text-sm font-medium rounded-lg transition-all hidden">
+                    Reiniciar Sistema
+                </button>
+            </div>
+        </div>
+
+        <!-- Middle Panel: Visualization (5 cols) -->
+        <div class="lg:col-span-5 bg-slate-900 relative min-h-[500px] flex flex-col">
+            <!-- Visual Stage -->
+            <div id="visual-stage" class="w-full space-y-3 relative pb-20">
+                <!-- Steps injected here -->
+            </div>
+
+            <!-- Overlays -->
+            <div id="threat-overlay" class="absolute inset-0 bg-red-950/95 backdrop-blur-md flex flex-col items-center justify-center z-50 hidden opacity-0 transition-opacity duration-500 rounded-xl border border-red-500/30">
+                <i data-lucide="skull" class="w-16 h-16 text-red-500 mb-4 animate-bounce"></i>
+                <h2 class="text-2xl font-bold text-white mb-2">BOOTKIT DETECTADO</h2>
+                <div class="bg-black/50 p-4 rounded text-xs font-mono text-red-300 mb-6 border border-red-900">
+                    <p>> INTERRUPT 13h HOOKED</p>
+                    <p>> MBR CODE REPLACED</p>
+                    <p>> SIGNATURE VERIFICATION: N/A</p>
+                    <p>> SYSTEM COMPROMISED</p>
+                </div>
+                <button onclick="resetSim()" class="px-6 py-2 bg-red-600 text-white font-bold rounded hover:bg-red-500 transition">Reiniciar</button>
+            </div>
+
+            <div id="success-overlay" class="absolute inset-0 bg-green-950/95 backdrop-blur-md flex flex-col items-center justify-center z-50 hidden opacity-0 transition-opacity duration-500 rounded-xl border border-green-500/30">
+                <div id="success-icon-wrapper"></div>
+                <h2 class="text-2xl font-bold text-white mb-2">OS KERNEL LOADED</h2>
+                <div class="bg-black/50 p-4 rounded text-xs font-mono text-green-300 mb-6 border border-green-900 max-w-xs text-center">
+                    <p id="success-msg">Kernel initialization complete.</p>
+                </div>
+                <button onclick="resetSim()" class="px-6 py-2 bg-green-600 text-white font-bold rounded hover:bg-green-500 transition">Reiniciar</button>
+            </div>
+        </div>
+
+        <!-- Right Panel: Technical Console (4 cols) -->
+        <div class="lg:col-span-4 bg-black rounded-xl border border-slate-700 overflow-hidden flex flex-col font-mono text-xs shadow-2xl">
+            <div class="bg-slate-800 px-4 py-2 border-b border-slate-700 flex justify-between items-center">
+                <span class="text-slate-400 font-semibold">System Log / Debug <span class="text-xs font-normal text-slate-500 ml-2">(Click para info)</span></span>
+                <div class="flex gap-1.5">
+                    <div class="w-2 h-2 rounded-full bg-red-500"></div>
+                    <div class="w-2 h-2 rounded-full bg-yellow-500"></div>
+                    <div class="w-2 h-2 rounded-full bg-green-500"></div>
+                </div>
+            </div>
+            <div id="console-output" class="p-4 flex-1 overflow-y-auto space-y-1 text-green-400 h-[500px]">
+                <div class="text-slate-500">Waiting for power on...</div>
+            </div>
+        </div>
+
+    </main>
+
+    <script>
+        lucide.createIcons();
+
+        const state = {
+            mode: 'uefi',
+            step: 0,
+            infected: false
+        };
+
+        // EXPLICACIONES DETALLADAS: Aquí está el contenido educativo
+        const logs = {
+            bios: [
+                [
+                    { text: "> POST: Checking conventional memory...", explanation: "El 'Power-On Self-Test' verifica la memoria RAM básica. En el modo BIOS Legacy, la CPU comienza en 'Modo Real', lo que limita la memoria direccionable a los primeros 640 KB. Esta es una limitación histórica de la arquitectura x86 original." },
+                    { text: "> RAM: 640KB OK", explanation: "Se ha confirmado la integridad de la memoria convencional. Si hubiera un error aquí (como una RAM defectuosa), el sistema se detendría antes de cargar nada, generalmente emitiendo pitidos (beeps) de error." },
+                    { text: "> VGA BIOS initialized at 0xC0000", explanation: "La tarjeta gráfica tiene su propia mini-BIOS. Esta línea indica que el código de la tarjeta gráfica se ha cargado en una dirección de memoria reservada (0xC0000) para poder mostrar texto en la pantalla." },
+                    { text: "> INT 19h called (Bootstrap Loader)", explanation: "La interrupción 19h es el comando final del POST. Le dice a la CPU: 'Ya he verificado el hardware, ahora busca un disco de arranque e intenta leer su primer sector'. Es el puente entre el hardware y el software." }
+                ],
+                [
+                    { text: "> Reading Drive 80h, Cylinder 0, Head 0, Sector 1", explanation: "Drive 80h es el estándar para el primer disco duro. El BIOS usa direccionamiento CHS (Cilindro-Cabezal-Sector) para leer físicamente el primer sector del disco, donde reside el MBR." },
+                    { text: "> Loading 512 bytes to memory address 0x0000:0x7C00", explanation: "El MBR (Master Boot Record) es minúsculo: solo 512 bytes. Por convención histórica desde los años 80, el BIOS siempre carga este pequeño fragmento de código en la dirección de memoria física 0x7C00." },
+                    { text: "> Checking signature: 0xAA55 found.", explanation: "El BIOS verifica los últimos 2 bytes del sector cargado. Deben ser 0x55 y 0xAA. Si no están, el BIOS asume que el disco no es arrancable. Es una 'firma mágica' de validación muy básica." },
+                    { text: "> JMP 0x0000:0x7C00 (Executing MBR code)", explanation: "El momento crítico. El BIOS salta (JMP) a esa dirección de memoria y la CPU empieza a ejecutar ciegamente cualquier instrucción que haya allí. Aquí es donde un virus de bootkit toma el control si ha infectado el MBR." }
+                ],
+                [
+                    { text: "> Parsing Partition Table (Offset 0x1BE)", explanation: "El código del MBR lee su propia tabla de particiones, que está ubicada al final de esos 512 bytes (offset 0x1BE). Busca cuál de las 4 particiones primarias tiene la marca de 'Activa'." },
+                    { text: "> Partition 1: Active (0x80)", explanation: "Ha encontrado una partición marcada con el byte 0x80 (Bootable). El MBR ahora sabe dónde buscar el siguiente eslabón de la cadena de arranque." },
+                    { text: "> Loading VBR (Volume Boot Record) from Sector 63", explanation: "El MBR carga el primer sector de la partición activa (VBR). Este contiene un código un poco más complejo, específico del sistema operativo (en este caso, Windows)." },
+                    { text: "> Executing BOOTMGR.EXE (Real Mode -> Protected Mode)", explanation: "El gestor de arranque de Windows comienza. Una de sus primeras tareas será sacar a la CPU del limitado 'Modo Real' de 16-bits y pasar a 'Modo Protegido' (32-bits) para acceder a más memoria." }
+                ],
+                [
+                    { text: "> Loading NTOSKRNL.EXE", explanation: "Se carga el núcleo (Kernel) del sistema operativo. Es el corazón de Windows." },
+                    { text: "> Initializing HAL.DLL", explanation: "HAL (Hardware Abstraction Layer) es el traductor entre el Kernel y el hardware físico específico de tu placa base. Permite que el mismo Windows funcione en millones de PCs diferentes." },
+                    { text: "> Switching to Long Mode (64-bit)...", explanation: "Finalmente, la CPU cambia a modo de 64-bits (Long Mode), habilitando el uso de toda la RAM disponible (gigabytes o terabytes) y características modernas de seguridad." },
+                    { text: "> SYSTEM STARTUP", explanation: "El sistema operativo toma el control total. El firmware (BIOS) ya no interviene." }
+                ]
+            ],
+            uefi: [
+                [
+                    { text: "> UEFI Firmware Initialized", explanation: "UEFI es un mini sistema operativo en sí mismo. A diferencia del BIOS, es capaz de leer sistemas de archivos, usar el ratón y conectar a red antes de cargar Windows." },
+                    { text: "> SEC Phase: Pre-RAM initialization", explanation: "Fase de Seguridad (SEC). Es lo primero que corre. Configura la CPU para usar su memoria caché temporalmente como si fuera RAM ('Cache-as-RAM') porque los módulos de memoria principal aún no están inicializados." },
+                    { text: "> PEI Phase: CPU/Chipset init, Memory Map built", explanation: "Pre-EFI Initialization (PEI). Aquí es donde se detecta y enciende la memoria RAM real. Se crea un mapa de memoria para saber qué recursos tiene el sistema." },
+                    { text: "> DXE Phase: Loading drivers (Disk, USB, Network)...", explanation: "Driver Execution Environment (DXE). UEFI carga drivers independientes de la CPU. Aquí se cargan los controladores para leer discos duros, USBs y tarjetas gráficas en alta resolución." }
+                ],
+                [
+                    { text: "> Reading GPT Header (LBA 1)", explanation: "UEFI no usa MBR. Lee la Tabla de Particiones GUID (GPT), que es mucho más robusta y tiene copias de seguridad. Permite discos de más de 2 TB y particiones ilimitadas." },
+                    { text: "> Found EFI System Partition (GUID: ...)", explanation: "UEFI busca una partición específica formateada en FAT32 que tenga un identificador (GUID) especial. Ahí es donde se guardan los archivos de arranque .efi." },
+                    { text: "> Loading \\EFI\\Microsoft\\Boot\\bootmgfw.efi", explanation: "En lugar de leer un sector físico ciego, UEFI lee un archivo real (.efi) del sistema de archivos. Es mucho más inteligente y flexible que el método del sector 0 del BIOS." },
+                    { text: "> SECURE BOOT: Verifying signature (PKCS#7)...", explanation: "Punto crítico de seguridad. El firmware calcula el hash criptográfico del archivo de arranque y verifica su firma digital." },
+                    { text: "> KEY CHECK: Signature matches Key in 'db' (Microsoft CA)", explanation: "Comprueba si la firma pertenece a una entidad de confianza guardada en la base de datos interna ('db') del chip de la placa base. Si el archivo fue modificado por un virus, la firma no coincidirá y el arranque se detendrá." },
+                    { text: "> EXECUTION AUTHORIZED", explanation: "La firma es válida. El código no ha sido alterado. UEFI permite ejecutar el archivo." }
+                ],
+                [
+                    { text: "> Boot Manager Loaded", explanation: "El gestor de arranque de Windows se ejecuta en un entorno seguro." },
+                    { text: "> TPM 2.0: Measuring boot components into PCR[4]", explanation: "El chip TPM (Trusted Platform Module) toma 'medidas' (hashes) del software que se está cargando y las guarda en registros PCR. Esto crea un historial inmutable del proceso de arranque para auditorías." },
+                    { text: "> ELAM: Early Launch Anti-Malware driver loaded", explanation: "Windows carga un driver antivirus especial antes que cualquier otro driver de terceros. Esto asegura que el antivirus arranque antes que un posible rootkit." },
+                    { text: "> Verifying ELAM signature against 'db'...", explanation: "Se verifica también la firma de este driver antivirus para asegurar que es legítimo." },
+                    { text: "> DRIVER CHECK: Drivers marked as 'Good'", explanation: "El sistema verifica la firma de todos los demás drivers de inicio. Si alguno no está firmado correctamente, no se carga." }
+                ],
+                [
+                    { text: "> ExitBootServices() called", explanation: "UEFI termina su trabajo. Libera la memoria que estaba usando y entrega el control del hardware al Kernel de Windows." },
+                    { text: "> Handover to Windows Kernel (OS Loader)", explanation: "El Kernel de Windows recibe el mando, sabiendo que el entorno ha sido verificado y es seguro." },
+                    { text: "> VBS (Virtualization-based Security) enabled", explanation: "Windows usa funciones de virtualización del hardware para aislar una región de memoria segura, protegiendo credenciales y claves incluso si el kernel principal cae comprometido." },
+                    { text: "> Windows Logon Ready", explanation: "El sistema está listo para el usuario." }
+                ]
+            ]
+        };
+
+        const scenarios = {
+            bios: {
+                cpu: '1 MB (Real Mode)',
+                partition: 'MBR (Legacy)',
+                secureBoot: 'No disponible',
+                cpuClass: 'text-yellow-400 bg-yellow-400/10',
+                partClass: 'text-slate-300',
+                secClass: 'text-red-400 bg-red-400/10',
+                steps: [
+                    { title: '1. POST & BIOS Init', icon: 'cpu', desc: 'Inicialización de hardware básica. La CPU arranca en modo 16-bit (Real Mode) para compatibilidad con MS-DOS.', color: 'text-slate-400', border: 'border-slate-600' },
+                    { title: '2. MBR & IPL', icon: 'hard-drive', desc: 'Lectura del Sector 0 (MBR). Se carga el código IPL ciegamente. No hay validación de quién escribió ese código.', color: 'text-yellow-400', border: 'border-yellow-600', vulnerable: true },
+                    { title: '3. Bootloader (Legacy)', icon: 'terminal', desc: 'El MBR pasa el control al VBR de la partición activa. Si un virus sobrescribió el MBR, ahora tiene el control total.', color: 'text-yellow-400', border: 'border-yellow-600' },
+                    { title: '4. Kernel Load', icon: 'layers', desc: 'Carga final del Kernel. El sistema operativo asume que el hardware es confiable.', color: 'text-blue-400', border: 'border-blue-600' }
+                ]
+            },
+            uefi: {
+                cpu: 'Flat Memory (64-bit)',
+                partition: 'GPT (Modern)',
+                secureBoot: 'Active (PK/KEK/db)',
+                cpuClass: 'text-green-400 bg-green-400/10',
+                partClass: 'text-blue-300',
+                secClass: 'text-green-400 bg-green-400/10',
+                steps: [
+                    { title: '1. UEFI Phase (SEC/PEI)', icon: 'cpu', desc: 'Inicialización segura. Se establece la raíz de confianza (Root of Trust). CPU en modo protegido.', color: 'text-blue-400', border: 'border-blue-600' },
+                    { title: '2. Secure Boot Check', icon: 'shield-check', desc: 'Verificación criptográfica. El bootloader se valida contra la base de datos "db" usando claves RSA.', color: 'text-green-400', border: 'border-green-600', scan: true },
+                    { title: '3. Trusted Boot & TPM', icon: 'lock', desc: 'El chip TPM mide (hash) cada componente cargado. ELAM verifica firmas de drivers de terceros.', color: 'text-green-400', border: 'border-green-600', scan: true },
+                    { title: '4. OS Handover', icon: 'monitor-check', desc: 'Salida de servicios de arranque. El Kernel de Windows recibe un sistema verificado y limpio.', color: 'text-blue-400', border: 'border-blue-600' }
+                ]
+            }
+        };
+
+        // DOM Elements
+        const btnBios = document.getElementById('btn-bios');
+        const btnUefi = document.getElementById('btn-uefi');
+        const visualStage = document.getElementById('visual-stage');
+        const nextBtn = document.getElementById('next-btn');
+        const resetBtn = document.getElementById('reset-btn');
+        const consoleOutput = document.getElementById('console-output');
+        
+        const labelCpu = document.getElementById('cpu-mode');
+        const labelPart = document.getElementById('partition-type');
+        const labelSecure = document.getElementById('secure-boot-status');
+        
+        // Modal Elements
+        const modal = document.getElementById('info-modal');
+        const modalLogCode = document.getElementById('modal-log-code');
+        const modalDescription = document.getElementById('modal-description');
+
+        function setMode(mode) {
+            state.mode = mode;
+            state.step = 0;
+            
+            // Visual Toggle Styles
+            if(mode === 'bios') {
+                btnBios.className = `w-full px-4 py-3 rounded text-left flex items-center gap-3 transition-all bg-slate-700 border-l-4 border-yellow-500 shadow-lg`;
+                btnUefi.className = `w-full px-4 py-3 rounded text-left flex items-center gap-3 transition-all bg-slate-800 hover:bg-slate-700 opacity-60`;
+                
+                labelCpu.textContent = scenarios.bios.cpu;
+                labelCpu.className = scenarios.bios.cpuClass + " px-2 py-0.5 rounded";
+                labelPart.textContent = scenarios.bios.partition;
+                labelPart.className = scenarios.bios.partClass;
+                labelSecure.textContent = scenarios.bios.secureBoot;
+                labelSecure.className = scenarios.bios.secClass + " px-2 py-0.5 rounded";
+                
+                state.infected = Math.random() < 0.3; // 30% chance in BIOS
+            } else {
+                btnUefi.className = `w-full px-4 py-3 rounded text-left flex items-center gap-3 transition-all bg-slate-700 border-l-4 border-blue-500 shadow-lg`;
+                btnBios.className = `w-full px-4 py-3 rounded text-left flex items-center gap-3 transition-all bg-slate-800 hover:bg-slate-700 opacity-60`;
+                
+                labelCpu.textContent = scenarios.uefi.cpu;
+                labelCpu.className = scenarios.uefi.cpuClass + " px-2 py-0.5 rounded";
+                labelPart.textContent = scenarios.uefi.partition;
+                labelPart.className = scenarios.uefi.partClass;
+                labelSecure.textContent = scenarios.uefi.secureBoot;
+                labelSecure.className = scenarios.uefi.secClass + " px-2 py-0.5 rounded";
+                
+                state.infected = false;
+            }
+            
+            resetVisuals();
+        }
+
+        function resetVisuals() {
+            visualStage.innerHTML = '';
+            consoleOutput.innerHTML = '<div class="text-slate-500">System ready. Waiting for power on...</div>';
+            nextBtn.innerHTML = `<span>Iniciar Power On</span><i data-lucide="power" class="w-4 h-4"></i>`;
+            nextBtn.disabled = false;
+            nextBtn.classList.remove('hidden');
+            resetBtn.classList.add('hidden');
+            
+            document.getElementById('threat-overlay').classList.add('hidden', 'opacity-0');
+            document.getElementById('threat-overlay').classList.remove('flex');
+            document.getElementById('success-overlay').classList.add('hidden', 'opacity-0');
+            document.getElementById('success-overlay').classList.remove('flex');
+            
+            lucide.createIcons();
+        }
+
+        // --- NEW: MODAL LOGIC ---
+        function showLogInfo(logObj) {
+            modalLogCode.innerHTML = logObj.text
+                .replace(/(0x[0-9A-F]+)/g, '<span class="text-purple-400">$1</span>')
+                .replace(/(POST|MBR|UEFI|SECURE BOOT|TPM 2.0)/g, '<span class="text-yellow-200 font-bold">$1</span>');
+            
+            modalDescription.innerText = logObj.explanation;
+            
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+            // Small animation
+            setTimeout(() => {
+                modal.querySelector('div').classList.remove('scale-95', 'opacity-0');
+                modal.querySelector('div').classList.add('scale-100', 'opacity-100');
+            }, 10);
+        }
+
+        function closeModal() {
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+        }
+
+        // Close on clicking outside
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) closeModal();
+        });
+
+
+        function logToConsole(logItems, isError = false) {
+            logItems.forEach((item, index) => {
+                setTimeout(() => {
+                    const div = document.createElement('div');
+                    div.className = `console-line font-mono text-xs ${isError ? 'text-red-400' : 'text-green-400'} mb-1`;
+                    
+                    // Handle both simple strings (legacy/errors) and new Objects
+                    let logText = "";
+                    let explanation = "";
+
+                    if (typeof item === 'string') {
+                        logText = item;
+                        explanation = "Mensaje de sistema crítico generado por la simulación.";
+                    } else {
+                        logText = item.text;
+                        explanation = item.explanation;
+                    }
+
+                    // Highlight key terms for display
+                    let formattedLine = logText
+                        .replace(/(0x[0-9A-F]+)/g, '<span class="text-purple-400">$1</span>')
+                        .replace(/(POST|MBR|UEFI|SECURE BOOT|TPM 2.0)/g, '<span class="text-yellow-200 font-bold">$1</span>');
+                    
+                    div.innerHTML = `<span class="opacity-50 mr-2">[${new Date().toLocaleTimeString().split(' ')[0]}]</span> ${formattedLine}`;
+                    
+                    // Add interactivity
+                    div.onclick = () => showLogInfo(typeof item === 'string' ? {text: item, explanation: explanation} : item);
+                    
+                    consoleOutput.appendChild(div);
+                    consoleOutput.scrollTop = consoleOutput.scrollHeight;
+                }, index * 300);
+            });
+        }
+
+        function renderStep(stepIndex) {
+            const data = scenarios[state.mode].steps[stepIndex];
+            
+            const div = document.createElement('div');
+            div.className = `step-card relative flex items-start gap-4 p-4 rounded-lg bg-slate-800 border-l-4 ${data.border} shadow-lg opacity-0 transform translate-y-2 transition-all duration-500 ${data.scan ? 'scanning' : ''}`;
+            
+            const scanLine = data.scan ? `<div class="scan-line"></div>` : '';
+
+            div.innerHTML = `
+                ${scanLine}
+                <div class="mt-1 p-2 rounded-lg bg-slate-900 ${data.color}">
+                    <i data-lucide="${data.icon}" class="w-5 h-5"></i>
+                </div>
+                <div class="flex-1">
+                    <h4 class="font-bold text-sm text-white mb-1">${data.title}</h4>
+                    <p class="text-xs text-slate-400 leading-relaxed">${data.desc}</p>
+                </div>
+            `;
+            
+            visualStage.appendChild(div);
+            lucide.createIcons();
+
+            requestAnimationFrame(() => {
+                div.classList.remove('opacity-0', 'translate-y-2');
+            });
+            div.scrollIntoView({ behavior: 'smooth', block: 'end' });
+
+            // Add Logs
+            const stepLogs = logs[state.mode][stepIndex];
+            logToConsole(stepLogs);
+        }
+
+        function nextStep() {
+            const currentScenario = scenarios[state.mode];
+            
+            if (state.step < currentScenario.steps.length) {
+                
+                // Threat Logic for BIOS Step 2
+                if(state.mode === 'bios' && state.step === 1 && state.infected) {
+                     renderStep(state.step);
+                     setTimeout(() => {
+                        triggerThreat();
+                     }, 1500);
+                     state.step++;
+                     return;
+                }
+
+                renderStep(state.step);
+                state.step++;
+
+                // Button State
+                if (state.step < currentScenario.steps.length) {
+                    nextBtn.innerHTML = `<span>Siguiente: ${currentScenario.steps[state.step].title.split('.')[1]}</span><i data-lucide="arrow-right" class="w-4 h-4"></i>`;
+                } else {
+                    nextBtn.innerHTML = `<span>Finalizar Arranque</span><i data-lucide="check" class="w-4 h-4"></i>`;
+                }
+            } else {
+                triggerSuccess();
+            }
+        }
+
+        function triggerThreat() {
+            const overlay = document.getElementById('threat-overlay');
+            overlay.classList.remove('hidden');
+            overlay.classList.add('flex');
+            setTimeout(() => overlay.classList.remove('opacity-0'), 50);
+            
+            nextBtn.classList.add('hidden');
+            resetBtn.classList.remove('hidden');
+            
+            logToConsole([
+                "> WARNING: Invalid OpCode detected at 0x7C05",
+                "> CRITICAL: Boot sector checksum modified",
+                "> SYSTEM HALTED due to security compromise"
+            ], true);
+        }
+
+        function triggerSuccess() {
+            const overlay = document.getElementById('success-overlay');
+            const iconWrapper = document.getElementById('success-icon-wrapper');
+            const msg = document.getElementById('success-msg');
+            
+            overlay.classList.remove('hidden');
+            overlay.classList.add('flex');
+            
+            if (state.mode === 'uefi') {
+                iconWrapper.innerHTML = `<i data-lucide="shield-check" class="w-16 h-16 text-green-400 mb-4"></i>`;
+                msg.textContent = "Secure Boot & Trusted Boot verified integrity successfully.";
+            } else {
+                iconWrapper.innerHTML = `<i data-lucide="alert-triangle" class="w-16 h-16 text-yellow-400 mb-4"></i>`;
+                msg.textContent = "Legacy Boot complete. No integrity checks performed.";
+                // BIOS warning log
+                logToConsole(["> NOTE: Operating System loaded in Legacy Mode", "> WARNING: No Secure Boot protection active"], true);
+            }
+            
+            lucide.createIcons();
+            setTimeout(() => overlay.classList.remove('opacity-0'), 50);
+            
+            nextBtn.classList.add('hidden');
+            resetBtn.classList.remove('hidden');
+        }
+
+        function resetSim() {
+            state.step = 0;
+            setMode(state.mode);
+        }
+
+        // Init
+        setMode('uefi');
+
+    </script>
+</body>
+</html>
