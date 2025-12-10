@@ -13,14 +13,74 @@
         body { font-family: 'Inter', sans-serif; }
         .font-mono { font-family: 'Fira Code', monospace; }
         
+        /* TIMELINE STYLES */
+        .timeline-spine {
+            position: absolute;
+            left: 50%;
+            top: 40px;
+            bottom: 20px;
+            width: 2px;
+            background: #334155;
+            transform: translateX(-50%);
+            z-index: 0;
+        }
+
         .step-card {
-            transition: all 0.3s ease;
+            transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+            z-index: 10;
+            width: 45%;
         }
+        
+        /* Location: CHIP (Left) */
+        .step-chip {
+            align-self: flex-start;
+            margin-right: auto;
+            border-right: 4px solid #3b82f6; /* Blue border */
+        }
+        .step-chip::after { /* Connection dot */
+            content: '';
+            position: absolute;
+            top: 50%;
+            right: -11%; /* Adjust for gap */
+            width: 12px;
+            height: 12px;
+            background: #3b82f6;
+            border-radius: 50%;
+            border: 2px solid #0f172a;
+            transform: translateY(-50%);
+        }
+
+        /* Location: DISK (Right) */
+        .step-disk {
+            align-self: flex-end;
+            margin-left: auto;
+            border-left: 4px solid #f97316; /* Orange border */
+        }
+        .step-disk::after { /* Connection dot */
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: -11%; /* Adjust for gap */
+            width: 12px;
+            height: 12px;
+            background: #f97316;
+            border-radius: 50%;
+            border: 2px solid #0f172a;
+            transform: translateY(-50%);
+        }
+
+        /* Responsive adjustments for dots */
+        @media (min-width: 1024px) {
+            .step-chip::after { right: -12.5%; }
+            .step-disk::after { left: -12.5%; }
+        }
+
         .step-active {
-            border-color: #3b82f6;
-            background-color: rgba(59, 130, 246, 0.1);
             transform: scale(1.02);
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.3);
         }
+
         /* Scan line animation for Secure Boot */
         .scan-line {
             width: 100%;
@@ -183,8 +243,20 @@
 
         <!-- Middle Panel: Visualization (5 cols) -->
         <div class="lg:col-span-5 bg-slate-900 relative min-h-[500px] flex flex-col">
-            <!-- Visual Stage -->
-            <div id="visual-stage" class="w-full space-y-3 relative pb-20">
+            <!-- Headers for Timeline -->
+            <div class="flex w-full mb-2 px-2 text-[10px] uppercase tracking-wider font-bold opacity-60">
+                <div class="w-1/2 text-left text-blue-400 pl-2">
+                    <i data-lucide="cpu" class="w-3 h-3 inline mr-1"></i>En Chip (Firmware)
+                </div>
+                <div class="w-1/2 text-right text-orange-400 pr-2">
+                    En Disco (Storage)<i data-lucide="hard-drive" class="w-3 h-3 inline ml-1"></i>
+                </div>
+            </div>
+
+            <!-- Visual Stage (Timeline) -->
+            <div id="visual-stage" class="relative w-full flex flex-col gap-6 px-2 py-4 pb-20">
+                <!-- Spine is injected by JS or CSS -->
+                <div class="timeline-spine"></div>
                 <!-- Steps injected here -->
             </div>
 
@@ -237,61 +309,61 @@
             infected: false
         };
 
-        // EXPLICACIONES DETALLADAS: Aquí está el contenido educativo
+        // EXPLICACIONES DETALLADAS
         const logs = {
             bios: [
                 [
-                    { text: "> POST: Checking conventional memory...", explanation: "El 'Power-On Self-Test' verifica la memoria RAM básica. En el modo BIOS Legacy, la CPU comienza en 'Modo Real', lo que limita la memoria direccionable a los primeros 640 KB. Esta es una limitación histórica de la arquitectura x86 original." },
-                    { text: "> RAM: 640KB OK", explanation: "Se ha confirmado la integridad de la memoria convencional. Si hubiera un error aquí (como una RAM defectuosa), el sistema se detendría antes de cargar nada, generalmente emitiendo pitidos (beeps) de error." },
-                    { text: "> VGA BIOS initialized at 0xC0000", explanation: "La tarjeta gráfica tiene su propia mini-BIOS. Esta línea indica que el código de la tarjeta gráfica se ha cargado en una dirección de memoria reservada (0xC0000) para poder mostrar texto en la pantalla." },
-                    { text: "> INT 19h called (Bootstrap Loader)", explanation: "La interrupción 19h es el comando final del POST. Le dice a la CPU: 'Ya he verificado el hardware, ahora busca un disco de arranque e intenta leer su primer sector'. Es el puente entre el hardware y el software." }
+                    { text: "> POST: Checking conventional memory...", explanation: "El 'Power-On Self-Test' verifica la memoria RAM básica. En el modo BIOS Legacy, la CPU comienza en 'Modo Real', lo que limita la memoria direccionable a los primeros 640 KB." },
+                    { text: "> RAM: 640KB OK", explanation: "Se ha confirmado la integridad de la memoria convencional. Si hubiera un error aquí, el sistema se detendría antes de cargar nada." },
+                    { text: "> VGA BIOS initialized at 0xC0000", explanation: "La tarjeta gráfica tiene su propia mini-BIOS que se carga en una dirección de memoria reservada." },
+                    { text: "> INT 19h called (Bootstrap Loader)", explanation: "Interrupción final del POST. Ordena a la CPU buscar un disco de arranque e intentar leer su primer sector." }
                 ],
                 [
-                    { text: "> Reading Drive 80h, Cylinder 0, Head 0, Sector 1", explanation: "Drive 80h es el estándar para el primer disco duro. El BIOS usa direccionamiento CHS (Cilindro-Cabezal-Sector) para leer físicamente el primer sector del disco, donde reside el MBR." },
-                    { text: "> Loading 512 bytes to memory address 0x0000:0x7C00", explanation: "El MBR (Master Boot Record) es minúsculo: solo 512 bytes. Por convención histórica desde los años 80, el BIOS siempre carga este pequeño fragmento de código en la dirección de memoria física 0x7C00." },
-                    { text: "> Checking signature: 0xAA55 found.", explanation: "El BIOS verifica los últimos 2 bytes del sector cargado. Deben ser 0x55 y 0xAA. Si no están, el BIOS asume que el disco no es arrancable. Es una 'firma mágica' de validación muy básica." },
-                    { text: "> JMP 0x0000:0x7C00 (Executing MBR code)", explanation: "El momento crítico. El BIOS salta (JMP) a esa dirección de memoria y la CPU empieza a ejecutar ciegamente cualquier instrucción que haya allí. Aquí es donde un virus de bootkit toma el control si ha infectado el MBR." }
+                    { text: "> Reading Drive 80h, Cylinder 0, Head 0, Sector 1", explanation: "El BIOS usa direccionamiento CHS físico para leer el MBR en el primer sector del disco." },
+                    { text: "> Loading 512 bytes to memory address 0x0000:0x7C00", explanation: "El MBR (Master Boot Record) de 512 bytes se carga en la memoria RAM en la dirección física 0x7C00." },
+                    { text: "> Checking signature: 0xAA55 found.", explanation: "Verificación simple: comprueba si los últimos 2 bytes son 0x55 y 0xAA." },
+                    { text: "> JMP 0x0000:0x7C00 (Executing MBR code)", explanation: "El BIOS salta ciegamente a ejecutar el código del MBR. Aquí es donde los bootkits suelen atacar." }
                 ],
                 [
-                    { text: "> Parsing Partition Table (Offset 0x1BE)", explanation: "El código del MBR lee su propia tabla de particiones, que está ubicada al final de esos 512 bytes (offset 0x1BE). Busca cuál de las 4 particiones primarias tiene la marca de 'Activa'." },
-                    { text: "> Partition 1: Active (0x80)", explanation: "Ha encontrado una partición marcada con el byte 0x80 (Bootable). El MBR ahora sabe dónde buscar el siguiente eslabón de la cadena de arranque." },
-                    { text: "> Loading VBR (Volume Boot Record) from Sector 63", explanation: "El MBR carga el primer sector de la partición activa (VBR). Este contiene un código un poco más complejo, específico del sistema operativo (en este caso, Windows)." },
-                    { text: "> Executing BOOTMGR.EXE (Real Mode -> Protected Mode)", explanation: "El gestor de arranque de Windows comienza. Una de sus primeras tareas será sacar a la CPU del limitado 'Modo Real' de 16-bits y pasar a 'Modo Protegido' (32-bits) para acceder a más memoria." }
+                    { text: "> Parsing Partition Table (Offset 0x1BE)", explanation: "El MBR lee su propia tabla de particiones para encontrar la partición activa." },
+                    { text: "> Partition 1: Active (0x80)", explanation: "Se encuentra la partición de arranque." },
+                    { text: "> Loading VBR (Volume Boot Record) from Sector 63", explanation: "Se carga el sector de arranque del volumen de Windows." },
+                    { text: "> Executing BOOTMGR.EXE (Real Mode -> Protected Mode)", explanation: "El gestor de arranque de Windows inicia y prepara el salto a modo protegido (32-bit)." }
                 ],
                 [
-                    { text: "> Loading NTOSKRNL.EXE", explanation: "Se carga el núcleo (Kernel) del sistema operativo. Es el corazón de Windows." },
-                    { text: "> Initializing HAL.DLL", explanation: "HAL (Hardware Abstraction Layer) es el traductor entre el Kernel y el hardware físico específico de tu placa base. Permite que el mismo Windows funcione en millones de PCs diferentes." },
-                    { text: "> Switching to Long Mode (64-bit)...", explanation: "Finalmente, la CPU cambia a modo de 64-bits (Long Mode), habilitando el uso de toda la RAM disponible (gigabytes o terabytes) y características modernas de seguridad." },
-                    { text: "> SYSTEM STARTUP", explanation: "El sistema operativo toma el control total. El firmware (BIOS) ya no interviene." }
+                    { text: "> Loading NTOSKRNL.EXE", explanation: "Se carga el núcleo (Kernel) del sistema operativo desde el disco." },
+                    { text: "> Initializing HAL.DLL", explanation: "Se inicializa la capa de abstracción de hardware (HAL)." },
+                    { text: "> Switching to Long Mode (64-bit)...", explanation: "La CPU cambia a modo 64-bits para usar toda la RAM." },
+                    { text: "> SYSTEM STARTUP", explanation: "Windows toma el control total." }
                 ]
             ],
             uefi: [
                 [
-                    { text: "> UEFI Firmware Initialized", explanation: "UEFI es un mini sistema operativo en sí mismo. A diferencia del BIOS, es capaz de leer sistemas de archivos, usar el ratón y conectar a red antes de cargar Windows." },
-                    { text: "> SEC Phase: Pre-RAM initialization", explanation: "Fase de Seguridad (SEC). Es lo primero que corre. Configura la CPU para usar su memoria caché temporalmente como si fuera RAM ('Cache-as-RAM') porque los módulos de memoria principal aún no están inicializados." },
-                    { text: "> PEI Phase: CPU/Chipset init, Memory Map built", explanation: "Pre-EFI Initialization (PEI). Aquí es donde se detecta y enciende la memoria RAM real. Se crea un mapa de memoria para saber qué recursos tiene el sistema." },
-                    { text: "> DXE Phase: Loading drivers (Disk, USB, Network)...", explanation: "Driver Execution Environment (DXE). UEFI carga drivers independientes de la CPU. Aquí se cargan los controladores para leer discos duros, USBs y tarjetas gráficas en alta resolución." }
+                    { text: "> UEFI Firmware Initialized", explanation: "UEFI arranca como un mini sistema operativo capaz de leer archivos y red." },
+                    { text: "> SEC Phase: Pre-RAM initialization", explanation: "Fase de Seguridad. Se usa la caché de la CPU como RAM temporal." },
+                    { text: "> PEI Phase: CPU/Chipset init, Memory Map built", explanation: "Inicialización Pre-EFI. Se detecta y activa la memoria RAM real." },
+                    { text: "> DXE Phase: Loading drivers (Disk, USB, Network)...", explanation: "Entorno de Ejecución de Drivers. Se cargan controladores para hardware." }
                 ],
                 [
-                    { text: "> Reading GPT Header (LBA 1)", explanation: "UEFI no usa MBR. Lee la Tabla de Particiones GUID (GPT), que es mucho más robusta y tiene copias de seguridad. Permite discos de más de 2 TB y particiones ilimitadas." },
-                    { text: "> Found EFI System Partition (GUID: ...)", explanation: "UEFI busca una partición específica formateada en FAT32 que tenga un identificador (GUID) especial. Ahí es donde se guardan los archivos de arranque .efi." },
-                    { text: "> Loading \\EFI\\Microsoft\\Boot\\bootmgfw.efi", explanation: "En lugar de leer un sector físico ciego, UEFI lee un archivo real (.efi) del sistema de archivos. Es mucho más inteligente y flexible que el método del sector 0 del BIOS." },
-                    { text: "> SECURE BOOT: Verifying signature (PKCS#7)...", explanation: "Punto crítico de seguridad. El firmware calcula el hash criptográfico del archivo de arranque y verifica su firma digital." },
-                    { text: "> KEY CHECK: Signature matches Key in 'db' (Microsoft CA)", explanation: "Comprueba si la firma pertenece a una entidad de confianza guardada en la base de datos interna ('db') del chip de la placa base. Si el archivo fue modificado por un virus, la firma no coincidirá y el arranque se detendrá." },
-                    { text: "> EXECUTION AUTHORIZED", explanation: "La firma es válida. El código no ha sido alterado. UEFI permite ejecutar el archivo." }
+                    { text: "> Reading GPT Header (LBA 1)", explanation: "UEFI lee la tabla de particiones GPT, más robusta que MBR." },
+                    { text: "> Found EFI System Partition (GUID: ...)", explanation: "Se localiza la partición especial EFI formateada en FAT32." },
+                    { text: "> Loading \\EFI\\Microsoft\\Boot\\bootmgfw.efi", explanation: "UEFI lee el archivo de arranque directamente del sistema de archivos." },
+                    { text: "> SECURE BOOT: Verifying signature (PKCS#7)...", explanation: "El firmware calcula el hash del archivo y verifica su firma digital." },
+                    { text: "> KEY CHECK: Signature matches Key in 'db' (Microsoft CA)", explanation: "Se confirma que el archivo está firmado por una entidad de confianza (Microsoft)." },
+                    { text: "> EXECUTION AUTHORIZED", explanation: "La firma es válida y el código se ejecuta." }
                 ],
                 [
-                    { text: "> Boot Manager Loaded", explanation: "El gestor de arranque de Windows se ejecuta en un entorno seguro." },
-                    { text: "> TPM 2.0: Measuring boot components into PCR[4]", explanation: "El chip TPM (Trusted Platform Module) toma 'medidas' (hashes) del software que se está cargando y las guarda en registros PCR. Esto crea un historial inmutable del proceso de arranque para auditorías." },
-                    { text: "> ELAM: Early Launch Anti-Malware driver loaded", explanation: "Windows carga un driver antivirus especial antes que cualquier otro driver de terceros. Esto asegura que el antivirus arranque antes que un posible rootkit." },
-                    { text: "> Verifying ELAM signature against 'db'...", explanation: "Se verifica también la firma de este driver antivirus para asegurar que es legítimo." },
-                    { text: "> DRIVER CHECK: Drivers marked as 'Good'", explanation: "El sistema verifica la firma de todos los demás drivers de inicio. Si alguno no está firmado correctamente, no se carga." }
+                    { text: "> Boot Manager Loaded", explanation: "El gestor de arranque se ejecuta en entorno seguro." },
+                    { text: "> TPM 2.0: Measuring boot components into PCR[4]", explanation: "El chip TPM guarda mediciones (hashes) del software cargado para auditoría." },
+                    { text: "> ELAM: Early Launch Anti-Malware driver loaded", explanation: "Windows carga su antivirus antes que cualquier otro driver." },
+                    { text: "> Verifying ELAM signature against 'db'...", explanation: "Se verifica la firma del driver antivirus." },
+                    { text: "> DRIVER CHECK: Drivers marked as 'Good'", explanation: "Se verifican las firmas de todos los drivers de inicio." }
                 ],
                 [
-                    { text: "> ExitBootServices() called", explanation: "UEFI termina su trabajo. Libera la memoria que estaba usando y entrega el control del hardware al Kernel de Windows." },
-                    { text: "> Handover to Windows Kernel (OS Loader)", explanation: "El Kernel de Windows recibe el mando, sabiendo que el entorno ha sido verificado y es seguro." },
-                    { text: "> VBS (Virtualization-based Security) enabled", explanation: "Windows usa funciones de virtualización del hardware para aislar una región de memoria segura, protegiendo credenciales y claves incluso si el kernel principal cae comprometido." },
-                    { text: "> Windows Logon Ready", explanation: "El sistema está listo para el usuario." }
+                    { text: "> ExitBootServices() called", explanation: "UEFI finaliza y entrega el control al sistema operativo." },
+                    { text: "> Handover to Windows Kernel (OS Loader)", explanation: "El Kernel de Windows recibe un sistema verificado." },
+                    { text: "> VBS (Virtualization-based Security) enabled", explanation: "Windows aísla memoria crítica usando virtualización." },
+                    { text: "> Windows Logon Ready", explanation: "El sistema está listo." }
                 ]
             ]
         };
@@ -305,10 +377,10 @@
                 partClass: 'text-slate-300',
                 secClass: 'text-red-400 bg-red-400/10',
                 steps: [
-                    { title: '1. POST & BIOS Init', icon: 'cpu', desc: 'Inicialización de hardware básica. La CPU arranca en modo 16-bit (Real Mode) para compatibilidad con MS-DOS.', color: 'text-slate-400', border: 'border-slate-600' },
-                    { title: '2. MBR & IPL', icon: 'hard-drive', desc: 'Lectura del Sector 0 (MBR). Se carga el código IPL ciegamente. No hay validación de quién escribió ese código.', color: 'text-yellow-400', border: 'border-yellow-600', vulnerable: true },
-                    { title: '3. Bootloader (Legacy)', icon: 'terminal', desc: 'El MBR pasa el control al VBR de la partición activa. Si un virus sobrescribió el MBR, ahora tiene el control total.', color: 'text-yellow-400', border: 'border-yellow-600' },
-                    { title: '4. Kernel Load', icon: 'layers', desc: 'Carga final del Kernel. El sistema operativo asume que el hardware es confiable.', color: 'text-blue-400', border: 'border-blue-600' }
+                    { title: '1. POST & BIOS Init', icon: 'cpu', source: 'chip', desc: 'Hardware test. La BIOS carga desde Flash/ROM. CPU en Modo Real (Acceso total, inseguro).', color: 'text-slate-400', border: 'border-slate-600' },
+                    { title: '2. Lectura MBR', icon: 'hard-drive', source: 'disk', desc: 'Lectura física (Cilindro 0). Se leen 512 bytes ciegamente y se ejecutan. Punto de infección común.', color: 'text-yellow-400', border: 'border-yellow-600', vulnerable: true },
+                    { title: '3. Bootloader (VBR)', icon: 'terminal', source: 'disk', desc: 'Ejecuta código de partición activa (ej: BOOTMGR). Si hay malware, se ejecuta ahora.', color: 'text-yellow-400', border: 'border-yellow-600' },
+                    { title: '4. Carga de Windows', icon: 'layers', source: 'disk', desc: 'Carga NTOSKRNL.EXE. Si hubo infección previa, el sistema ya es del atacante.', color: 'text-blue-400', border: 'border-blue-600' }
                 ]
             },
             uefi: {
@@ -319,10 +391,10 @@
                 partClass: 'text-blue-300',
                 secClass: 'text-green-400 bg-green-400/10',
                 steps: [
-                    { title: '1. UEFI Phase (SEC/PEI)', icon: 'cpu', desc: 'Inicialización segura. Se establece la raíz de confianza (Root of Trust). CPU en modo protegido.', color: 'text-blue-400', border: 'border-blue-600' },
-                    { title: '2. Secure Boot Check', icon: 'shield-check', desc: 'Verificación criptográfica. El bootloader se valida contra la base de datos "db" usando claves RSA.', color: 'text-green-400', border: 'border-green-600', scan: true },
-                    { title: '3. Trusted Boot & TPM', icon: 'lock', desc: 'El chip TPM mide (hash) cada componente cargado. ELAM verifica firmas de drivers de terceros.', color: 'text-green-400', border: 'border-green-600', scan: true },
-                    { title: '4. OS Handover', icon: 'monitor-check', desc: 'Salida de servicios de arranque. El Kernel de Windows recibe un sistema verificado y limpio.', color: 'text-blue-400', border: 'border-blue-600' }
+                    { title: '1. UEFI Phase (SEC/PEI)', icon: 'cpu', source: 'chip', desc: 'Inicialización segura desde Chip Flash. Raíz de confianza establecida antes de tocar disco.', color: 'text-blue-400', border: 'border-blue-600' },
+                    { title: '2. Secure Boot Verify', icon: 'shield-check', source: 'chip', desc: 'El Firmware (Chip) lee el archivo .efi pero NO lo ejecuta hasta verificar su firma criptográfica.', color: 'text-green-400', border: 'border-green-600', scan: true },
+                    { title: '3. Trusted Boot & TPM', icon: 'lock', source: 'chip', desc: 'El Chip TPM mide (hash) componentes. ELAM verifica drivers de terceros antes de cargarlos.', color: 'text-green-400', border: 'border-green-600', scan: true },
+                    { title: '4. OS Handover', icon: 'monitor-check', source: 'disk', desc: 'Solo tras verificación exitosa, UEFI pasa el control al disco para cargar Windows.', color: 'text-blue-400', border: 'border-blue-600' }
                 ]
             }
         };
@@ -348,7 +420,6 @@
             state.mode = mode;
             state.step = 0;
             
-            // Visual Toggle Styles
             if(mode === 'bios') {
                 btnBios.className = `w-full px-4 py-3 rounded text-left flex items-center gap-3 transition-all bg-slate-700 border-l-4 border-yellow-500 shadow-lg`;
                 btnUefi.className = `w-full px-4 py-3 rounded text-left flex items-center gap-3 transition-all bg-slate-800 hover:bg-slate-700 opacity-60`;
@@ -360,7 +431,7 @@
                 labelSecure.textContent = scenarios.bios.secureBoot;
                 labelSecure.className = scenarios.bios.secClass + " px-2 py-0.5 rounded";
                 
-                state.infected = Math.random() < 0.3; // 30% chance in BIOS
+                state.infected = Math.random() < 0.3; 
             } else {
                 btnUefi.className = `w-full px-4 py-3 rounded text-left flex items-center gap-3 transition-all bg-slate-700 border-l-4 border-blue-500 shadow-lg`;
                 btnBios.className = `w-full px-4 py-3 rounded text-left flex items-center gap-3 transition-all bg-slate-800 hover:bg-slate-700 opacity-60`;
@@ -379,7 +450,8 @@
         }
 
         function resetVisuals() {
-            visualStage.innerHTML = '';
+            // Keep the spine when resetting
+            visualStage.innerHTML = '<div class="timeline-spine"></div>';
             consoleOutput.innerHTML = '<div class="text-slate-500">System ready. Waiting for power on...</div>';
             nextBtn.innerHTML = `<span>Iniciar Power On</span><i data-lucide="power" class="w-4 h-4"></i>`;
             nextBtn.disabled = false;
@@ -394,7 +466,6 @@
             lucide.createIcons();
         }
 
-        // --- NEW: MODAL LOGIC ---
         function showLogInfo(logObj) {
             modalLogCode.innerHTML = logObj.text
                 .replace(/(0x[0-9A-F]+)/g, '<span class="text-purple-400">$1</span>')
@@ -404,7 +475,6 @@
             
             modal.classList.remove('hidden');
             modal.classList.add('flex');
-            // Small animation
             setTimeout(() => {
                 modal.querySelector('div').classList.remove('scale-95', 'opacity-0');
                 modal.querySelector('div').classList.add('scale-100', 'opacity-100');
@@ -416,11 +486,9 @@
             modal.classList.remove('flex');
         }
 
-        // Close on clicking outside
         modal.addEventListener('click', (e) => {
             if (e.target === modal) closeModal();
         });
-
 
         function logToConsole(logItems, isError = false) {
             logItems.forEach((item, index) => {
@@ -428,7 +496,6 @@
                     const div = document.createElement('div');
                     div.className = `console-line font-mono text-xs ${isError ? 'text-red-400' : 'text-green-400'} mb-1`;
                     
-                    // Handle both simple strings (legacy/errors) and new Objects
                     let logText = "";
                     let explanation = "";
 
@@ -440,14 +507,11 @@
                         explanation = item.explanation;
                     }
 
-                    // Highlight key terms for display
                     let formattedLine = logText
                         .replace(/(0x[0-9A-F]+)/g, '<span class="text-purple-400">$1</span>')
                         .replace(/(POST|MBR|UEFI|SECURE BOOT|TPM 2.0)/g, '<span class="text-yellow-200 font-bold">$1</span>');
                     
                     div.innerHTML = `<span class="opacity-50 mr-2">[${new Date().toLocaleTimeString().split(' ')[0]}]</span> ${formattedLine}`;
-                    
-                    // Add interactivity
                     div.onclick = () => showLogInfo(typeof item === 'string' ? {text: item, explanation: explanation} : item);
                     
                     consoleOutput.appendChild(div);
@@ -460,18 +524,24 @@
             const data = scenarios[state.mode].steps[stepIndex];
             
             const div = document.createElement('div');
-            div.className = `step-card relative flex items-start gap-4 p-4 rounded-lg bg-slate-800 border-l-4 ${data.border} shadow-lg opacity-0 transform translate-y-2 transition-all duration-500 ${data.scan ? 'scanning' : ''}`;
+            // Logic for visual split: CHIP vs DISK
+            const locationClass = data.source === 'chip' ? 'step-chip' : 'step-disk';
+            
+            div.className = `step-card ${locationClass} flex items-start gap-3 p-3 rounded-lg bg-slate-800 shadow-lg opacity-0 transform translate-y-2 ${data.scan ? 'scanning' : ''}`;
             
             const scanLine = data.scan ? `<div class="scan-line"></div>` : '';
+            
+            // Icon Background
+            const iconBg = data.source === 'chip' ? 'bg-blue-900/40 text-blue-300' : 'bg-orange-900/40 text-orange-300';
 
             div.innerHTML = `
                 ${scanLine}
-                <div class="mt-1 p-2 rounded-lg bg-slate-900 ${data.color}">
+                <div class="mt-1 p-2 rounded-lg ${iconBg}">
                     <i data-lucide="${data.icon}" class="w-5 h-5"></i>
                 </div>
                 <div class="flex-1">
-                    <h4 class="font-bold text-sm text-white mb-1">${data.title}</h4>
-                    <p class="text-xs text-slate-400 leading-relaxed">${data.desc}</p>
+                    <h4 class="font-bold text-sm text-white mb-0.5">${data.title}</h4>
+                    <p class="text-xs text-slate-400 leading-tight">${data.desc}</p>
                 </div>
             `;
             
@@ -481,9 +551,8 @@
             requestAnimationFrame(() => {
                 div.classList.remove('opacity-0', 'translate-y-2');
             });
-            div.scrollIntoView({ behavior: 'smooth', block: 'end' });
+            div.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 
-            // Add Logs
             const stepLogs = logs[state.mode][stepIndex];
             logToConsole(stepLogs);
         }
@@ -506,7 +575,6 @@
                 renderStep(state.step);
                 state.step++;
 
-                // Button State
                 if (state.step < currentScenario.steps.length) {
                     nextBtn.innerHTML = `<span>Siguiente: ${currentScenario.steps[state.step].title.split('.')[1]}</span><i data-lucide="arrow-right" class="w-4 h-4"></i>`;
                 } else {
@@ -547,7 +615,6 @@
             } else {
                 iconWrapper.innerHTML = `<i data-lucide="alert-triangle" class="w-16 h-16 text-yellow-400 mb-4"></i>`;
                 msg.textContent = "Legacy Boot complete. No integrity checks performed.";
-                // BIOS warning log
                 logToConsole(["> NOTE: Operating System loaded in Legacy Mode", "> WARNING: No Secure Boot protection active"], true);
             }
             
