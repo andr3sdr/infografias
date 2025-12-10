@@ -277,6 +277,7 @@
               setIsEncrypted(false);
             }
 
+            // Seleccionar automáticamente el último mensaje si no hay ninguno seleccionado (para el inicio)
             if (step > 0 && !animatingStep && !selectedMsg && !showHostWarning) {
               setSelectedMsg(steps[step - 1]);
             }
@@ -294,10 +295,11 @@
             setTimeout(() => {
               setStep(prev => prev + 1);
               setAnimatingStep(null);
+              setSelectedMsg(nextStepData); // <--- Actualización automática del inspector
               
               if (nextStepData.isVulnerableStep && !hostTrusted) {
                 setShowHostWarning(true);
-                setSelectedMsg(nextStepData);
+                // setSelectedMsg ya lo estableció arriba
               }
             }, 1200);
           };
