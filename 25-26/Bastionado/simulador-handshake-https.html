@@ -34,6 +34,14 @@
           0% { left: 100%; }
           100% { left: 0%; }
         }
+        .highlight-row {
+            animation: pulse-bg 2s infinite;
+        }
+        @keyframes pulse-bg {
+            0% { background-color: rgba(245, 158, 11, 0.1); }
+            50% { background-color: rgba(245, 158, 11, 0.2); }
+            100% { background-color: rgba(245, 158, 11, 0.1); }
+        }
     </style>
 </head>
 <body class="bg-gray-50 text-slate-800 font-sans">
@@ -64,6 +72,7 @@
         const Mail = (props) => <IconBase {...props}><rect width="20" height="16" x="2" y="4" rx="2" /><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7" /></IconBase>;
         const Info = (props) => <IconBase {...props}><circle cx="12" cy="12" r="10" /><path d="M12 16v-4" /><path d="M12 8h.01" /></IconBase>;
         const X = (props) => <IconBase {...props}><path d="M18 6 6 18" /><path d="m6 6 12 12" /></IconBase>;
+        const Star = (props) => <IconBase {...props}><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" /></IconBase>;
 
         // --- Componente Principal ---
         const HttpsSimulation = () => {
@@ -175,6 +184,7 @@
               icon: <Monitor size={20} />,
               packetIcon: <Mail size={24} />,
               summary: "El navegador inicia la conexión y propone opciones de cifrado.",
+              highlightKeys: ["Cipher Suites", "Random"],
               details: {
                 "Protocol Version": "TLS 1.2 (o 1.3)",
                 "Random": "28 a4 c1 ... (32 bytes aleatorios)",
@@ -196,6 +206,7 @@
               icon: <Server size={20} />,
               packetIcon: <Mail size={24} />,
               summary: "El servidor elige la mejor opción de cifrado y responde.",
+              highlightKeys: ["Cipher Suite Selected", "Random"],
               details: {
                 "Protocol Version": "TLS 1.2",
                 "Random": "5b 3d 9a ... (32 bytes aleatorios)",
@@ -212,6 +223,7 @@
               icon: <FileText size={20} />,
               packetIcon: <FileText size={24} />,
               summary: "El servidor envía su ID digital (Certificado SSL) para probar su identidad.",
+              highlightKeys: ["Subject", "Issuer", "Validity"],
               details: {
                 "Certificate Length": "1452 bytes",
                 "Subject": "CN=www.ejemplo.com, O=Ejemplo Corp, C=ES",
@@ -229,6 +241,7 @@
               icon: <Key size={20} />,
               packetIcon: <Key size={24} />,
               summary: "El servidor envía parámetros para generar claves y termina su turno.",
+              highlightKeys: ["EC Diffie-Hellman Server Params", "Signature"],
               details: {
                 "EC Diffie-Hellman Server Params": {
                   "Curve": "secp256r1",
@@ -246,6 +259,7 @@
               icon: <Key size={20} />,
               packetIcon: <Key size={24} />,
               summary: "El navegador envía su parte para calcular la 'Clave Maestra'.",
+              highlightKeys: ["EC Diffie-Hellman Client Params"],
               details: {
                 "EC Diffie-Hellman Client Params": {
                   "Public Key": "04 5c 9d ... (Punto en la curva del cliente)"
@@ -261,6 +275,7 @@
               icon: <Shield size={20} />,
               packetIcon: <Shield size={24} />,
               summary: "El navegador indica: 'Todo lo siguiente irá cifrado'.",
+              highlightKeys: ["Message"],
               details: {
                 "Content Type": "Change Cipher Spec (20)",
                 "Message": "Change Cipher Spec Message (1 byte: 01)"
@@ -274,6 +289,7 @@
               icon: <ShieldCheck size={20} />,
               packetIcon: <Lock size={24} />,
               summary: "Primer mensaje totalmente cifrado del navegador para verificar integridad.",
+              highlightKeys: ["Verify Data"],
               details: {
                 "Content Type": "Handshake (22)",
                 "Verify Data": "Encrpyted (AES-GCM)",
@@ -288,6 +304,7 @@
               icon: <ShieldCheck size={20} />,
               packetIcon: <Lock size={24} />,
               summary: "El servidor confirma el cifrado y verifica la integridad.",
+              highlightKeys: ["Handshake Message"],
               details: {
                 "Content Type": "Change Cipher Spec",
                 "Handshake Message": "Finished (Encrypted)",
@@ -302,6 +319,7 @@
               icon: <Code size={20} />,
               packetIcon: <FileText size={24} />,
               summary: "Conexión segura establecida. Se envían datos web (GET / index.html).",
+              highlightKeys: ["Decrypted Content"],
               details: {
                 "Protocol": "HTTP/1.1 (over TLS)",
                 "Encrypted Data": "a3 f4 92 b1 ... (Texto ininteligible)",
@@ -354,22 +372,30 @@
             const renderValue = (key, value) => {
               const hasDesc = fieldDescriptions[key];
               const isObject = typeof value === 'object' && !Array.isArray(value);
+              const isHighlight = data.highlightKeys && data.highlightKeys.includes(key);
 
               return (
-                <div key={key} className="flex flex-col border-b border-slate-800 pb-2 mb-2 last:border-0">
-                  <div className="flex justify-between items-start">
+                <div 
+                    key={key} 
+                    className={`flex flex-col border-b border-slate-800 pb-2 mb-2 last:border-0 rounded-sm px-2 -mx-2 transition-colors
+                        ${isHighlight ? 'bg-amber-900/20 border-l-2 border-amber-500' : ''}
+                    `}
+                >
+                  <div className="flex justify-between items-start pt-1">
                     <button 
                       onClick={() => hasDesc && setSelectedFieldInfo(fieldDescriptions[key])}
                       className={`font-semibold mr-2 flex items-center gap-1.5 transition-colors text-left
-                        ${hasDesc ? 'text-blue-300 hover:text-blue-100 cursor-help group' : 'text-slate-400 cursor-default'}
+                        ${isHighlight ? 'text-amber-400' : (hasDesc ? 'text-blue-300 hover:text-blue-100 cursor-help group' : 'text-slate-400 cursor-default')}
                       `}
                     >
                       {key}
-                      {hasDesc && <Info size={12} className="opacity-50 group-hover:opacity-100" />}
+                      {hasDesc && <Info size={12} className={`opacity-50 group-hover:opacity-100 ${isHighlight ? 'text-amber-400' : ''}`} />}
                     </button>
                     
                     {!isObject && (
-                      <span className="text-right text-gray-300 break-all text-xs sm:text-sm max-w-[60%]">
+                      <span className={`text-right break-all text-xs sm:text-sm max-w-[60%]
+                        ${isHighlight ? 'text-amber-100 font-medium' : 'text-gray-300'}
+                      `}>
                         {Array.isArray(value) ? (
                           <ul className="list-disc list-inside text-right text-gray-400">
                             {value.map((v, i) => <li key={i}>{v}</li>)}
@@ -392,8 +418,9 @@
 
             return (
               <div className="bg-slate-900 text-green-400 font-mono text-sm p-4 rounded-lg shadow-inner h-full overflow-y-auto border border-slate-700 animate-fadeIn relative">
-                <h3 className="text-white font-bold text-lg mb-2 border-b border-slate-600 pb-2 sticky top-0 bg-slate-900 z-10">
-                  {data.name}
+                <h3 className="text-white font-bold text-lg mb-2 border-b border-slate-600 pb-2 sticky top-0 bg-slate-900 z-10 flex justify-between items-center">
+                  <span>{data.name}</span>
+                  {data.id >= 7 && <Lock size={16} className="text-green-500" />}
                 </h3>
                 <p className="text-gray-300 mb-4 font-sans text-xs italic">{data.summary}</p>
                 
@@ -616,6 +643,10 @@
                       <div className="flex items-center gap-2">
                         <div className="w-3 h-3 bg-green-500 rounded-full animate-pulse"></div>
                         <span className="text-gray-600">Tráfico Encriptado</span>
+                      </div>
+                      <div className="flex items-center gap-2 border-t pt-2 mt-2">
+                        <div className="w-3 h-3 bg-amber-500 rounded-full animate-pulse"></div>
+                        <span className="text-gray-600 font-medium">Campos Clave (Razón del Paquete)</span>
                       </div>
                     </div>
                   </div>
