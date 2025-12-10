@@ -1,1 +1,587 @@
+import React, { useState, useEffect, useRef } from 'react';
+import { Shield, ShieldCheck, Server, Monitor, Lock, Unlock, ArrowRight, ArrowLeft, RefreshCw, FileText, Key, Code, Mail, Info, X } from 'lucide-react';
 
+const HttpsSimulation = () => {
+  const [step, setStep] = useState(0);
+  const [selectedMsg, setSelectedMsg] = useState(null);
+  const [isEncrypted, setIsEncrypted] = useState(false);
+  const [animatingStep, setAnimatingStep] = useState(null);
+  const [selectedFieldInfo, setSelectedFieldInfo] = useState(null); // Estado para el popup de información
+  const bottomRef = useRef(null);
+
+  // Diccionario de definiciones técnicas TLS
+  const fieldDescriptions = {
+    "Protocol Version": {
+      title: "Versión del Protocolo",
+      text: "Indica la versión de TLS que se está negociando (ej. TLS 1.2 o 1.3). Las versiones más nuevas son más seguras y rápidas. Si el cliente y el servidor no coinciden, la conexión fallará."
+    },
+    "Random": {
+      title: "Random (Aleatorio)",
+      text: "32 bytes de datos generados aleatoriamente. Tanto el cliente como el servidor generan uno. Son CRUCIALES para evitar 'ataques de repetición' y se usan como ingredientes para mezclar y crear la clave maestra de encriptación final."
+    },
+    "Session ID": {
+      title: "ID de Sesión",
+      text: "Un identificador único creado por el servidor. Si el cliente se vuelve a conectar poco después, puede enviar este ID para reanudar la sesión anterior ('Session Resumption') sin tener que hacer todo el pesado cálculo criptográfico de nuevo."
+    },
+    "Cipher Suites": {
+      title: "Suites de Cifrado (Opciones)",
+      text: "Una lista de 'menús' criptográficos que el cliente soporta. Cada opción define 4 algoritmos: 1) Intercambio de claves (ej. ECDHE), 2) Autenticación (ej. RSA), 3) Cifrado de datos (ej. AES) y 4) Verificación de integridad (ej. SHA256)."
+    },
+    "Cipher Suite Selected": {
+      title: "Suite de Cifrado Seleccionada",
+      text: "La combinación ganadora que el servidor ha elegido de la lista del cliente. Esta definirá exactamente qué matemáticas se usarán para proteger toda la conversación."
+    },
+    "Compression Methods": {
+      title: "Métodos de Compresión",
+      text: "Antiguamente se usaba para comprimir datos, pero hoy en día casi siempre es 'null' (desactivado) por seguridad. La compresión en HTTPS habilitaba ataques peligrosos como CRIME o BREACH."
+    },
+    "Extensions": {
+      title: "Extensiones",
+      text: "Módulos adicionales para funciones modernas. La más importante es SNI (Server Name Indication), que permite al servidor saber qué dominio (ej. google.com vs youtube.com) quieres visitar antes de enviarte el certificado."
+    },
+    "Certificate Length": {
+      title: "Longitud del Certificado",
+      text: "El tamaño en bytes del certificado digital. Los certificados muy grandes pueden ralentizar el inicio de la conexión."
+    },
+    "Subject": {
+      title: "Sujeto (Subject)",
+      text: "El propietario del certificado. Indica para quién fue emitido (ej. Common Name = www.google.com). El navegador verifica que esto coincida con la URL que escribiste."
+    },
+    "Issuer": {
+      title: "Emisor (Issuer)",
+      text: "La Autoridad de Certificación (CA) que verificó la identidad del sujeto y firmó digitalmente este certificado (ej. DigiCert, Let's Encrypt). El navegador confía en el sitio porque confía en el Emisor."
+    },
+    "Validity": {
+      title: "Validez",
+      text: "El rango de fechas (No antes de - No después de) en que el certificado es válido. Si la fecha actual está fuera de este rango, el navegador mostrará una alerta roja de seguridad."
+    },
+    "Public Key Algorithm": {
+      title: "Algoritmo de Clave Pública",
+      text: "El tipo de criptografía asimétrica usada por el certificado (ej. RSA o ECDSA). Esta clave pública se usa para verificar firmas y asegurar el intercambio de claves."
+    },
+    "Signature Algorithm": {
+      title: "Algoritmo de Firma",
+      text: "El algoritmo que usó el Emisor (CA) para firmar este certificado. Suele ser un hash fuerte (SHA-256) cifrado con la clave privada de la CA para evitar falsificaciones."
+    },
+    "EC Diffie-Hellman Server Params": {
+      title: "Parámetros ECDHE Servidor",
+      text: "Datos matemáticos (puntos en una curva elíptica) que el servidor envía para iniciar el intercambio de claves Diffie-Hellman. Esto permite crear un secreto compartido en público sin que nadie más lo sepa."
+    },
+    "EC Diffie-Hellman Client Params": {
+      title: "Parámetros ECDHE Cliente",
+      text: "La respuesta matemática del cliente al desafío del servidor. Al combinar estos parámetros con los del servidor, ambas partes calculan mágicamente el mismo 'Secreto Premastro' sin haberlo enviado nunca por la red."
+    },
+    "Pre-Master Secret": {
+      title: "Secreto Premastro",
+      text: "El valor secreto original derivado del intercambio de claves. A partir de este valor (y los Randoms), se generan matemáticamente las verdaderas claves de sesión para encriptar los datos."
+    },
+    "Signature": {
+      title: "Firma Digital",
+      text: "El servidor firma sus parámetros de intercambio de claves usando su Clave Privada. Esto prueba que los parámetros realmente vienen del servidor (autenticación) y no de un hacker en medio de la conexión."
+    },
+    "Content Type": {
+      title: "Tipo de Contenido (Record Type)",
+      text: "Cabecera que dice qué tipo de mensaje es este. 22 = Handshake (negociación), 20 = ChangeCipherSpec (cambio a modo seguro), 23 = Application Data (datos web cifrados)."
+    },
+    "Message": {
+      title: "Mensaje",
+      text: "El contenido específico del paquete. Por ejemplo 'Change Cipher Spec' es una señal de 1 byte que dice '¡Cambio y fuera! Lo siguiente que escuches estará cifrado'."
+    },
+    "Verify Data": {
+      title: "Datos de Verificación",
+      text: "Un hash (resumen) cifrado de TOOOODOS los mensajes anteriores del handshake. Si el servidor puede descifrarlo y el hash coincide, prueba que nadie manipuló los mensajes iniciales."
+    },
+    "Encrypted Data": {
+      title: "Datos Encriptados",
+      text: "El contenido real (HTML, imágenes, JSON) convertido en ruido ininteligible mediante el algoritmo simétrico (ej. AES). Solo quien tenga la clave de sesión puede volver a hacerlo legible."
+    },
+    "Decrypted Content": {
+      title: "Contenido Descifrado",
+      text: "Lo que ve el navegador después de aplicar la clave de sesión a los datos encriptados. Aquí es donde finalmente aparece la petición HTTP o la página web."
+    }
+  };
+
+  const steps = [
+    {
+      id: 1,
+      name: "Client Hello",
+      sender: "client",
+      receiver: "server",
+      icon: <Monitor size={20} />,
+      packetIcon: <Mail size={24} />,
+      summary: "El navegador inicia la conexión y propone opciones de cifrado.",
+      details: {
+        "Protocol Version": "TLS 1.2 (o 1.3)",
+        "Random": "28 a4 c1 ... (32 bytes aleatorios)",
+        "Session ID": "00 00 00 00 (Nuevo)",
+        "Cipher Suites": [
+          "TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256",
+          "TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384",
+          "TLS_RSA_WITH_AES_128_CBC_SHA"
+        ],
+        "Compression Methods": ["null"],
+        "Extensions": ["server_name (SNI)", "supported_groups", "signature_algorithms"]
+      }
+    },
+    {
+      id: 2,
+      name: "Server Hello",
+      sender: "server",
+      receiver: "client",
+      icon: <Server size={20} />,
+      packetIcon: <Mail size={24} />,
+      summary: "El servidor elige la mejor opción de cifrado y responde.",
+      details: {
+        "Protocol Version": "TLS 1.2",
+        "Random": "5b 3d 9a ... (32 bytes aleatorios)",
+        "Session ID": "4f 2a 11 ... (ID de sesión generado)",
+        "Cipher Suite Selected": "TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256",
+        "Compression Method": "null"
+      }
+    },
+    {
+      id: 3,
+      name: "Certificate",
+      sender: "server",
+      receiver: "client",
+      icon: <FileText size={20} />,
+      packetIcon: <FileText size={24} />,
+      summary: "El servidor envía su ID digital (Certificado SSL) para probar su identidad.",
+      details: {
+        "Certificate Length": "1452 bytes",
+        "Subject": "CN=www.ejemplo.com, O=Ejemplo Corp, C=ES",
+        "Issuer": "CN=DigiCert Global CA",
+        "Validity": "2023-10-01 to 2024-10-01",
+        "Public Key Algorithm": "rsaEncryption (2048 bits)",
+        "Signature Algorithm": "sha256WithRSAEncryption"
+      }
+    },
+    {
+      id: 4,
+      name: "Server Key Exchange & Hello Done",
+      sender: "server",
+      receiver: "client",
+      icon: <Key size={20} />,
+      packetIcon: <Key size={24} />,
+      summary: "El servidor envía parámetros para generar claves y termina su turno.",
+      details: {
+        "EC Diffie-Hellman Server Params": {
+          "Curve": "secp256r1",
+          "Public Key": "04 3a 2b ... (Punto en la curva)"
+        },
+        "Signature": "Firmado con la clave privada RSA del servidor",
+        "Message": "Server Hello Done"
+      }
+    },
+    {
+      id: 5,
+      name: "Client Key Exchange",
+      sender: "client",
+      receiver: "server",
+      icon: <Key size={20} />,
+      packetIcon: <Key size={24} />,
+      summary: "El navegador envía su parte para calcular la 'Clave Maestra'.",
+      details: {
+        "EC Diffie-Hellman Client Params": {
+          "Public Key": "04 5c 9d ... (Punto en la curva del cliente)"
+        },
+        "Pre-Master Secret": "(Calculado internamente, no se envía en texto plano)"
+      }
+    },
+    {
+      id: 6,
+      name: "Change Cipher Spec",
+      sender: "client",
+      receiver: "server",
+      icon: <Shield size={20} />,
+      packetIcon: <Shield size={24} />,
+      summary: "El navegador indica: 'Todo lo siguiente irá cifrado'.",
+      details: {
+        "Content Type": "Change Cipher Spec (20)",
+        "Message": "Change Cipher Spec Message (1 byte: 01)"
+      }
+    },
+    {
+      id: 7,
+      name: "Finished (Encrypted)",
+      sender: "client",
+      receiver: "server",
+      icon: <ShieldCheck size={20} />,
+      packetIcon: <Lock size={24} />,
+      summary: "Primer mensaje totalmente cifrado del navegador para verificar integridad.",
+      details: {
+        "Content Type": "Handshake (22)",
+        "Verify Data": "Encrpyted (AES-GCM)",
+        "Note": "El servidor descifra esto para verificar que el handshake fue genuino."
+      }
+    },
+    {
+      id: 8,
+      name: "Change Cipher Spec & Finished",
+      sender: "server",
+      receiver: "client",
+      icon: <ShieldCheck size={20} />,
+      packetIcon: <Lock size={24} />,
+      summary: "El servidor confirma el cifrado y verifica la integridad.",
+      details: {
+        "Content Type": "Change Cipher Spec",
+        "Handshake Message": "Finished (Encrypted)",
+        "Status": "Handshake Complete"
+      }
+    },
+    {
+      id: 9,
+      name: "Application Data (HTTP)",
+      sender: "client",
+      receiver: "server",
+      icon: <Code size={20} />,
+      packetIcon: <FileText size={24} />,
+      summary: "Conexión segura establecida. Se envían datos web (GET / index.html).",
+      details: {
+        "Protocol": "HTTP/1.1 (over TLS)",
+        "Encrypted Data": "a3 f4 92 b1 ... (Texto ininteligible)",
+        "Decrypted Content": "GET /home.html HTTP/1.1\nHost: www.ejemplo.com\nUser-Agent: Mozilla/5.0..."
+      }
+    }
+  ];
+
+  const currentMessages = steps.slice(0, step);
+
+  useEffect(() => {
+    if (bottomRef.current) {
+      bottomRef.current.scrollIntoView({ behavior: 'smooth' });
+    }
+    if (step >= 8) {
+      setIsEncrypted(true);
+    } else {
+      setIsEncrypted(false);
+    }
+    
+    if (step > 0 && !animatingStep && !selectedMsg) {
+      setSelectedMsg(steps[step - 1]);
+    } else if (step > 0 && !animatingStep) {
+      setSelectedMsg(steps[step - 1]);
+    }
+  }, [step, animatingStep]);
+
+  const handleNext = () => {
+    if (step < steps.length && !animatingStep) {
+      const nextStepData = steps[step];
+      setAnimatingStep(nextStepData);
+      setTimeout(() => {
+        setStep(prev => prev + 1);
+        setAnimatingStep(null);
+      }, 1200);
+    }
+  };
+
+  const handleReset = () => {
+    setStep(0);
+    setSelectedMsg(null);
+    setIsEncrypted(false);
+    setAnimatingStep(null);
+    setSelectedFieldInfo(null);
+  };
+
+  const PacketDetail = ({ data }) => {
+    if (!data) return <div className="text-gray-400 italic p-4 text-center">Selecciona un mensaje del diagrama para ver los campos del paquete.</div>;
+
+    const renderValue = (key, value) => {
+      const hasDesc = fieldDescriptions[key];
+      const isObject = typeof value === 'object' && !Array.isArray(value);
+
+      return (
+        <div key={key} className="flex flex-col border-b border-slate-800 pb-2 mb-2 last:border-0">
+          <div className="flex justify-between items-start">
+            <button 
+              onClick={() => hasDesc && setSelectedFieldInfo(fieldDescriptions[key])}
+              className={`font-semibold mr-2 flex items-center gap-1.5 transition-colors text-left
+                ${hasDesc ? 'text-blue-300 hover:text-blue-100 cursor-help group' : 'text-slate-400 cursor-default'}
+              `}
+            >
+              {key}
+              {hasDesc && <Info size={12} className="opacity-50 group-hover:opacity-100" />}
+            </button>
+            
+            {!isObject && (
+              <span className="text-right text-gray-300 break-all text-xs sm:text-sm max-w-[60%]">
+                {Array.isArray(value) ? (
+                  <ul className="list-disc list-inside text-right text-gray-400">
+                    {value.map((v, i) => <li key={i}>{v}</li>)}
+                  </ul>
+                ) : (
+                  value
+                )}
+              </span>
+            )}
+          </div>
+
+          {isObject && (
+             <div className="pl-4 mt-1 border-l border-slate-700">
+               {Object.entries(value).map(([subKey, subVal]) => renderValue(subKey, subVal))}
+             </div>
+          )}
+        </div>
+      );
+    };
+
+    return (
+      <div className="bg-slate-900 text-green-400 font-mono text-sm p-4 rounded-lg shadow-inner h-full overflow-y-auto border border-slate-700 animate-fadeIn relative">
+        <h3 className="text-white font-bold text-lg mb-2 border-b border-slate-600 pb-2 sticky top-0 bg-slate-900 z-10">
+          {data.name}
+        </h3>
+        <p className="text-gray-300 mb-4 font-sans text-xs italic">{data.summary}</p>
+        
+        <div className="space-y-2">
+          {Object.entries(data.details).map(([key, value]) => renderValue(key, value))}
+        </div>
+      </div>
+    );
+  };
+
+  return (
+    <div className="min-h-screen bg-gray-50 flex flex-col p-4 md:p-8 font-sans text-slate-800 relative">
+      
+      {/* Field Info Modal/Popup */}
+      {selectedFieldInfo && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white rounded-xl shadow-2xl max-w-md w-full p-6 relative border border-gray-100 transform transition-all scale-100">
+            <button 
+              onClick={() => setSelectedFieldInfo(null)}
+              className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 transition-colors"
+            >
+              <X size={20} />
+            </button>
+            <div className="flex items-center gap-3 mb-4">
+              <div className="bg-indigo-100 p-2 rounded-lg text-indigo-600">
+                <Info size={24} />
+              </div>
+              <h3 className="text-xl font-bold text-gray-800">{selectedFieldInfo.title}</h3>
+            </div>
+            <p className="text-gray-600 leading-relaxed text-sm md:text-base">
+              {selectedFieldInfo.text}
+            </p>
+            <div className="mt-6 flex justify-end">
+              <button 
+                onClick={() => setSelectedFieldInfo(null)}
+                className="bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 transition-colors text-sm font-medium"
+              >
+                Entendido
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Header */}
+      <header className="mb-6 flex flex-col md:flex-row justify-between items-center bg-white p-6 rounded-xl shadow-sm border border-gray-200">
+        <div>
+          <h1 className="text-2xl font-bold text-indigo-700 flex items-center gap-2">
+            {isEncrypted ? <Lock className="text-green-500 animate-bounce" /> : <Unlock className="text-red-500" />}
+            Simulador de Handshake HTTPS
+          </h1>
+          <p className="text-gray-500 text-sm mt-1">Visualización interactiva de paquetes TLS 1.2</p>
+        </div>
+        <div className="mt-4 md:mt-0 flex gap-3">
+          <button 
+            onClick={handleReset}
+            className="px-4 py-2 flex items-center gap-2 bg-gray-200 hover:bg-gray-300 rounded-lg text-gray-700 transition-colors font-medium"
+          >
+            <RefreshCw size={18} /> Reiniciar
+          </button>
+          <button 
+            onClick={handleNext}
+            disabled={step >= steps.length || animatingStep !== null}
+            className={`px-6 py-2 flex items-center gap-2 rounded-lg text-white font-bold transition-all shadow-lg
+              ${step >= steps.length || animatingStep 
+                ? 'bg-gray-400 cursor-not-allowed' 
+                : 'bg-indigo-600 hover:bg-indigo-700 hover:scale-105 active:scale-95'}`}
+          >
+            {animatingStep 
+              ? "Transmitiendo..." 
+              : step === 0 ? "Iniciar Conexión" : step >= steps.length ? "Conexión Segura" : "Siguiente Paso"}
+            {!animatingStep && <ArrowRight size={18} />}
+          </button>
+        </div>
+      </header>
+
+      {/* Main Content Grid */}
+      <div className="flex-1 grid grid-cols-1 lg:grid-cols-3 gap-6">
+        
+        {/* Left Column: Visual Flow */}
+        <div className="lg:col-span-2 bg-white rounded-xl shadow-sm border border-gray-200 flex flex-col overflow-hidden h-[600px] relative">
+          
+          {/* Top Actors & Packet Animation Area */}
+          <div className="flex justify-between items-center p-6 bg-slate-50 border-b border-gray-200 z-10 sticky top-0 h-32 relative">
+            
+            {/* Client Actor */}
+            <div className="flex flex-col items-center p-4 bg-blue-50 rounded-lg border border-blue-100 w-24 md:w-32 z-20 relative">
+              <Monitor size={40} className="text-blue-600 mb-2" />
+              <span className="font-bold text-sm text-blue-800">Navegador</span>
+            </div>
+            
+            {/* Connection Line & Status */}
+            <div className="flex-1 px-4 flex flex-col items-center relative">
+               {/* Base Line */}
+              <div className="h-2 w-full bg-gray-200 rounded-full overflow-hidden relative">
+                {/* Active/Encrypted Line */}
+                <div 
+                  className={`h-full transition-all duration-1000 absolute left-0 top-0 
+                    ${isEncrypted ? 'bg-green-500 w-full' : 'bg-gray-300 w-full'}
+                    ${animatingStep ? 'opacity-50' : 'opacity-100'}
+                  `}
+                />
+                
+                {/* Data Pulse Effect during transmission */}
+                {animatingStep && (
+                  <div className={`absolute top-0 bottom-0 w-20 bg-gradient-to-r from-transparent via-white to-transparent opacity-50 
+                    ${animatingStep.sender === 'client' ? 'animate-[slideRight_1s_ease-in-out_infinite]' : 'animate-[slideLeft_1s_ease-in-out_infinite]'}`} 
+                  />
+                )}
+              </div>
+
+              <span className={`text-xs mt-2 font-mono px-2 py-1 rounded transition-colors duration-500
+                ${isEncrypted ? 'bg-green-100 text-green-700 font-bold border border-green-300' : 'bg-red-100 text-red-700'}`}>
+                {isEncrypted ? "CANAL SEGURO (AES-256)" : "CANAL INSEGURO"}
+              </span>
+
+              {/* FLYING PACKET ANIMATION ELEMENT */}
+              {animatingStep && (
+                <div 
+                  className={`absolute top-[-20px] z-30 transition-all duration-1000 ease-in-out`}
+                  style={{
+                    left: animatingStep.sender === 'client' ? '10%' : '90%',
+                    transform: animatingStep.sender === 'client' ? 'translateX(0)' : 'translateX(-100%)',
+                    animation: animatingStep.sender === 'client' 
+                      ? 'flyRight 1s forwards ease-in-out' 
+                      : 'flyLeft 1s forwards ease-in-out'
+                  }}
+                >
+                  <div className={`p-3 rounded-full shadow-xl border-2 
+                    ${animatingStep.id >= 7 ? 'bg-green-100 border-green-500 text-green-700' : 'bg-yellow-100 border-yellow-500 text-yellow-700'}`}>
+                    {animatingStep.packetIcon}
+                  </div>
+                  <div className="absolute -bottom-6 left-1/2 -translate-x-1/2 text-[10px] font-bold bg-white px-2 py-0.5 rounded shadow whitespace-nowrap">
+                    {animatingStep.name}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Server Actor */}
+            <div className="flex flex-col items-center p-4 bg-purple-50 rounded-lg border border-purple-100 w-24 md:w-32 z-20 relative">
+              <Server size={40} className="text-purple-600 mb-2" />
+              <span className="font-bold text-sm text-purple-800">Servidor</span>
+            </div>
+          </div>
+
+          {/* Timeline Messages */}
+          <div className="flex-1 overflow-y-auto p-6 bg-slate-50/50 space-y-6 relative scroll-smooth">
+            {step === 0 && !animatingStep && (
+              <div className="absolute inset-0 flex items-center justify-center text-gray-400 flex-col opacity-50">
+                <ArrowRight size={48} className="mb-2" />
+                <p>Pulsa "Iniciar Conexión" para comenzar</p>
+              </div>
+            )}
+            
+            {currentMessages.map((msg, index) => (
+              <div 
+                key={msg.id}
+                onClick={() => setSelectedMsg(msg)}
+                className={`cursor-pointer transition-all duration-500 transform
+                  flex flex-col ${msg.sender === 'client' ? 'items-start' : 'items-end'}
+                  animate-in fade-in slide-in-from-bottom-4 duration-500
+                `}
+              >
+                <div className={`
+                  relative max-w-[85%] md:max-w-[70%] p-4 rounded-lg border-2 shadow-sm group transition-all
+                  ${selectedMsg?.id === msg.id 
+                    ? 'border-indigo-500 ring-2 ring-indigo-200 scale-[1.02] shadow-md' 
+                    : 'border-transparent hover:border-gray-300 hover:shadow-md'}
+                  ${msg.sender === 'client' 
+                    ? 'bg-blue-100 text-blue-900 rounded-tl-none border-l-4 border-l-blue-500 ml-2' 
+                    : 'bg-purple-100 text-purple-900 rounded-tr-none border-r-4 border-r-purple-500 mr-2'}
+                  ${msg.id >= 7 ? 'bg-green-50 text-green-900 border-green-500' : ''}
+                `}>
+                  <div className="flex items-center gap-2 mb-2 pb-2 border-b border-black/10">
+                    <span className="p-1 rounded bg-white/50">{msg.packetIcon}</span>
+                    <span className="font-bold text-sm">{msg.name}</span>
+                    {msg.id >= 7 && <Lock size={14} className="text-green-600 ml-auto" />}
+                  </div>
+                  <p className="text-xs opacity-90 leading-relaxed">{msg.summary}</p>
+                </div>
+                <span className="text-[10px] text-gray-400 mt-1 px-2 font-mono">
+                  {msg.sender === 'client' ? 'Cliente → Servidor' : 'Servidor → Cliente'} • ID: {msg.id}
+                </span>
+              </div>
+            ))}
+            <div ref={bottomRef} />
+          </div>
+        </div>
+
+        {/* Right Column: Packet Inspector */}
+        <div className="lg:col-span-1 flex flex-col h-[600px]">
+          <div className="bg-slate-800 text-white p-3 rounded-t-xl flex items-center gap-2 shadow-lg">
+            <Code size={18} />
+            <h2 className="font-semibold text-sm uppercase tracking-wide">Inspector de Paquetes</h2>
+          </div>
+          <div className="flex-1 bg-slate-900 rounded-b-xl overflow-hidden border-x border-b border-slate-700 shadow-lg flex flex-col">
+             {selectedMsg ? (
+                <PacketDetail data={selectedMsg} />
+             ) : (
+                <div className="h-full flex flex-col items-center justify-center text-gray-500 p-8 text-center opacity-60">
+                  <Code size={48} className="mb-4 text-gray-600" />
+                  <p>Selecciona un mensaje del diagrama para inspeccionar sus datos.</p>
+                </div>
+             )}
+          </div>
+          
+          {/* Quick Legend */}
+          <div className="mt-4 bg-white p-4 rounded-xl border border-gray-200 text-sm shadow-sm">
+            <h3 className="font-bold text-gray-700 mb-2">Leyenda</h3>
+            <div className="space-y-2">
+              <div className="flex items-center gap-2">
+                <div className="w-3 h-3 bg-blue-500 rounded-full"></div>
+                <span className="text-gray-600">Navegador (Cliente)</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-3 h-3 bg-purple-500 rounded-full"></div>
+                <span className="text-gray-600">Servidor</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-3 h-3 bg-green-500 rounded-full animate-pulse"></div>
+                <span className="text-gray-600">Tráfico Encriptado</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <style>{`
+        @keyframes flyRight {
+          0% { left: 10%; opacity: 0; transform: scale(0.5); }
+          10% { opacity: 1; transform: scale(1); }
+          90% { opacity: 1; transform: scale(1); }
+          100% { left: 85%; opacity: 0; transform: scale(0.5); }
+        }
+        @keyframes flyLeft {
+          0% { left: 85%; opacity: 0; transform: scale(0.5); }
+          10% { opacity: 1; transform: scale(1); }
+          90% { opacity: 1; transform: scale(1); }
+          100% { left: 10%; opacity: 0; transform: scale(0.5); }
+        }
+        @keyframes slideRight {
+          0% { left: 0%; }
+          100% { left: 100%; }
+        }
+        @keyframes slideLeft {
+          0% { left: 100%; }
+          100% { left: 0%; }
+        }
+      `}</style>
+    </div>
+  );
+};
+
+export default HttpsSimulation;
