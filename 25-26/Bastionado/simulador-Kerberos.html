@@ -1,431 +1,359 @@
-import React, { useState, useEffect } from 'react';
-import { 
-  User, Server, Database, Key, Ticket, Lock, Shield, ArrowRight, 
-  RefreshCw, CheckCircle, FileText, Info, X, AlertTriangle, 
-  ShieldCheck, MousePointer2, Unlock, BookOpen, Layout, Binary
-} from 'lucide-react';
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kerberos MasterClass - Simulación Interactiva</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        @keyframes bounce-slow {
+            0%, 100% { transform: translateY(-5%); }
+            50% { transform: translateY(0); }
+        }
+        .animate-bounce-slow {
+            animation: bounce-slow 2s infinite;
+        }
+        .packet-transition {
+            transition: all 1s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .actor-transition {
+            transition: all 0.3s ease;
+        }
+        .step-indicator-transition {
+            transition: width 0.5s ease-out;
+        }
+        /* Estilos para estados de los actores */
+        .actor-idle { @apply border-slate-200 text-slate-300 bg-white; }
+        .actor-active { @apply border-blue-500 text-blue-600 bg-white shadow-2xl scale-110; }
+        .actor-waiting { @apply border-orange-400 text-orange-500 bg-white animate-pulse; }
+        .actor-success { @apply border-green-500 text-green-600 bg-white shadow-2xl scale-110; }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-900 font-sans min-h-screen p-4 md:p-8">
 
-const KerberosFlow = () => {
-  const [step, setStep] = useState(0);
-  const [animating, setAnimating] = useState(false);
-  const [showDetails, setShowDetails] = useState(false);
-  const [packetLocation, setPacketLocation] = useState('start');
-  const [mode, setMode] = useState('technical'); // 'technical' or 'analogy'
-
-  // Definición de pasos enriquecida con analogías y datos de seguridad
-  const steps = [
-    {
-      id: 0,
-      title: "Estado Inicial",
-      phase: "Configuración",
-      desc: "Antes de empezar, el KDC conoce las contraseñas (hashes) de todos. El usuario conoce la suya. El servicio conoce la suya.",
-      analogy: "Estás en la entrada de un parque de atracciones. Tienes tu DNI, pero aún no tienes ninguna entrada ni pase.",
-      packet: null,
-      actors: { client: 'idle', as: 'idle', tgs: 'idle', service: 'idle' },
-      vaults: {
-        client: ["Contraseña Usuario"],
-        kdc: ["Hash Usuario", "Hash krbtgt", "Hash Servicio"],
-        service: ["Hash Servicio"]
-      },
-      keysInfo: "Secretos compartidos: El AD almacena los hashes NTLM. Estos son los 'secretos' que permiten confiar sin enviar contraseñas por la red."
-    },
-    {
-      id: 1,
-      title: "KRB_AS_REQ",
-      phase: "Paso 1: Identificación",
-      desc: "El cliente envía su ID y una prueba de identidad (timestamp cifrado) al AS.",
-      analogy: "Vas a la Ventanilla 1 (AS). Dices quién eres y enseñas tu DNI para demostrarlo.",
-      packet: { from: 'client', to: 'as', label: 'AS_REQ', icon: <User size={16} /> },
-      actors: { client: 'active', as: 'waiting', tgs: 'idle', service: 'idle' },
-      details: {
-        fields: ["cname: username", "padata: timestamp cifrado", "nonce"],
-        attacks: [{ name: "AS-REP Roasting", desc: "Si no hay pre-autenticación, se puede pedir este paquete para cualquier usuario y crackearlo." }],
-        logic: "Usa el Hash del Usuario para cifrar. Si el AS puede descifrarlo, sabe que el usuario es real."
-      },
-      vaults: {
-        client: ["Contraseña Usuario"],
-        kdc: ["Hash Usuario", "Hash krbtgt", "Hash Servicio"],
-        service: ["Hash Servicio"]
-      },
-      keysInfo: "🔐 Cifrado con: Hash NTLM del Usuario.\nEl AS descifra esto usando la copia del hash que tiene en su base de datos."
-    },
-    {
-      id: 2,
-      title: "KRB_AS_REP",
-      phase: "Paso 2: Entrega de Pase (TGT)",
-      desc: "El AS entrega el Ticket Granting Ticket (TGT) y una clave de sesión temporal.",
-      analogy: "La Ventanilla 1 te da una pulsera (TGT) que dice que eres tú. La pulsera está sellada y no puedes abrirla.",
-      packet: { from: 'as', to: 'client', label: 'AS_REP', icon: <Lock size={16} />, subIcon: <Ticket size={12} /> },
-      actors: { client: 'waiting', as: 'active', tgs: 'idle', service: 'idle' },
-      details: {
-        fields: ["TGT (Cifrado con krbtgt)", "Logon Session Key (Cifrada con Hash Usuario)"],
-        attacks: [{ name: "Golden Ticket", desc: "Si robas la clave 'krbtgt', puedes fabricar tus propias pulseras falsas infinitas." }],
-        logic: "El TGT contiene el PAC (privilegios). El usuario no puede ver su contenido."
-      },
-      vaults: {
-        client: ["Contraseña Usuario", "Logon Session Key"],
-        kdc: ["Hash Usuario", "Hash krbtgt", "Hash Servicio"],
-        service: ["Hash Servicio"]
-      },
-      keysInfo: "🔑 Clave Maestra: Hash 'krbtgt'.\nSolo el KDC puede leer lo que hay dentro del TGT. El usuario solo lo 'guarda'."
-    },
-    {
-      id: 3,
-      title: "KRB_TGS_REQ",
-      phase: "Paso 3: Pedir Ticket de Atracción",
-      desc: "El usuario presenta su TGT al TGS para pedir acceso a un servidor específico.",
-      analogy: "Vas a la Ventanilla 2 (TGS). Enseñas tu pulsera (TGT) y pides un ticket para la Montaña Rusa (Servicio).",
-      packet: { from: 'client', to: 'tgs', label: 'TGS_REQ', icon: <Ticket size={16} /> },
-      actors: { client: 'active', as: 'idle', tgs: 'waiting', service: 'idle' },
-      details: {
-        fields: ["TGT", "Authenticator", "SPN (Service Name)"],
-        attacks: [{ name: "Pass-The-Ticket", desc: "Si robas una pulsera (TGT) de la memoria de otro, puedes pedir tickets en su nombre." }],
-        logic: "El TGS usa la clave 'krbtgt' para abrir el TGT y ver si el usuario sigue siendo válido."
-      },
-      vaults: {
-        client: ["Contraseña Usuario", "Logon Session Key", "TGT (Cerrado)"],
-        kdc: ["Hash Usuario", "Hash krbtgt", "Hash Servicio"],
-        service: ["Hash Servicio"]
-      },
-      keysInfo: "🔓 Descifrando TGT: El TGS usa el Hash 'krbtgt' compartido con el AS."
-    },
-    {
-      id: 4,
-      title: "KRB_TGS_REP",
-      phase: "Paso 4: Entrega Ticket de Servicio",
-      desc: "El TGS entrega un Service Ticket cifrado con la clave del servidor destino.",
-      analogy: "La Ventanilla 2 comprueba tu pulsera y te da el ticket de la Montaña Rusa.",
-      packet: { from: 'tgs', to: 'client', label: 'TGS_REP', icon: <FileText size={16} />, subIcon: <Key size={12} /> },
-      actors: { client: 'waiting', as: 'idle', tgs: 'active', service: 'idle' },
-      details: {
-        fields: ["Service Ticket (Cifrado con clave Servicio)", "Service Session Key"],
-        attacks: [{ name: "Kerberoasting", desc: "El ticket está cifrado con la clave del servicio. Si es una pass débil, se crackea fácil." }],
-        logic: "El ticket contiene el PAC con los grupos de seguridad del usuario."
-      },
-      vaults: {
-        client: ["Contraseña Usuario", "Logon Session Key", "Service Session Key"],
-        kdc: ["Hash Usuario", "Hash krbtgt", "Hash Servicio"],
-        service: ["Hash Servicio"]
-      },
-      keysInfo: "🔐 Cifrado con: Hash del Servicio.\nSolo el File Server podrá abrir este ticket."
-    },
-    {
-      id: 5,
-      title: "KRB_AP_REQ",
-      phase: "Paso 5: Acceso al Recurso",
-      desc: "El cliente envía el Service Ticket al servidor final. El servidor lo abre con su propia clave.",
-      analogy: "Llegas a la Montaña Rusa y entregas el ticket al operario.",
-      packet: { from: 'client', to: 'service', label: 'AP_REQ', icon: <Shield size={16} /> },
-      actors: { client: 'active', as: 'idle', tgs: 'idle', service: 'waiting' },
-      details: {
-        fields: ["Service Ticket", "Authenticator"],
-        attacks: [{ name: "Silver Ticket", desc: "Si robas la clave del operario, puedes inventar tickets de atracción tú mismo." }],
-        logic: "El servidor no necesita hablar con el KDC; confía en que solo el KDC pudo cifrar ese ticket."
-      },
-      vaults: {
-        client: ["Logon Session Key", "Service Ticket (Cerrado)"],
-        kdc: ["Hash krbtgt"],
-        service: ["Hash Servicio"]
-      },
-      keysInfo: "🔓 El servidor usa su propio Hash NTLM para abrir el ticket. Si el PAC dice que eres Admin, te deja pasar."
-    },
-    {
-      id: 6,
-      title: "Acceso Concedido",
-      phase: "Finalización",
-      desc: "¡Autenticación completada! El servicio ya sabe quién eres sin haber visto nunca tu contraseña.",
-      analogy: "¡Estás disfrutando de la atracción! El operario sabe que pagaste porque el ticket era auténtico.",
-      packet: { from: 'service', to: 'client', label: 'AP_REP', icon: <CheckCircle size={16} /> },
-      actors: { client: 'success', as: 'idle', tgs: 'idle', service: 'success' },
-      details: { fields: ["Confirmación de tiempo"], attacks: [] },
-      vaults: {
-        client: ["Pase de Acceso"],
-        kdc: [],
-        service: ["Identidad Verificada"]
-      },
-      keysInfo: "Resultado: Confianza mutua establecida mediante criptografía de clave simétrica."
-    }
-  ];
-
-  const currentStepData = steps[step];
-
-  useEffect(() => {
-    if (step > 0 && currentStepData.packet) {
-      setAnimating(true);
-      setPacketLocation('start');
-      const startTimer = setTimeout(() => setPacketLocation('end'), 50);
-      const endTimer = setTimeout(() => setAnimating(false), 1050);
-      return () => { clearTimeout(startTimer); clearTimeout(endTimer); };
-    }
-  }, [step]);
-
-  const handleNext = () => { if (step < steps.length - 1) { setShowDetails(false); setStep(step + 1); } };
-  const handleReset = () => { setStep(0); setAnimating(false); setShowDetails(false); setPacketLocation('start'); };
-
-  const getPacketPosition = (packet, location) => {
-    if (!packet) return { display: 'none' };
-    const positions = {
-      client: { left: '10%', top: '65%' },
-      as: { left: '42%', top: '25%' },
-      tgs: { left: '58%', top: '25%' },
-      service: { left: '90%', top: '65%' }
-    };
-    const targetPos = location === 'start' ? positions[packet.from] : positions[packet.to];
-    return {
-      left: targetPos.left, top: targetPos.top, opacity: 1, transform: 'translate(-50%, -50%)',
-      transition: location === 'start' ? 'none' : 'all 1s cubic-bezier(0.4, 0, 0.2, 1)'
-    };
-  };
-
-  return (
-    <div className="flex flex-col w-full max-w-6xl mx-auto p-4 bg-slate-50 rounded-2xl shadow-2xl border border-slate-200 font-sans relative overflow-hidden">
-      
-      {/* GLOSARIO RÁPIDO (Sidebar Didáctico) */}
-      <div className="absolute left-4 top-24 bottom-4 w-48 bg-white/60 backdrop-blur-md rounded-xl border border-slate-200 p-3 hidden xl:block z-10 shadow-sm">
-        <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3 flex items-center gap-1">
-          <BookOpen size={12} /> Glosario
-        </h4>
-        <div className="space-y-4">
-          <div>
-            <p className="text-[10px] font-bold text-blue-700">NTLM Hash</p>
-            <p className="text-[9px] text-slate-500 italic">Es tu contraseña 'disfrazada'. Nunca se envía tal cual por la red.</p>
-          </div>
-          <div>
-            <p className="text-[10px] font-bold text-indigo-700">PAC</p>
-            <p className="text-[9px] text-slate-500 italic">Lista de tus privilegios y grupos (quién eres en el dominio).</p>
-          </div>
-          <div>
-            <p className="text-[10px] font-bold text-orange-700">SPN</p>
-            <p className="text-[9px] text-slate-500 italic">El nombre 'único' del servicio (ej: cifs/fileserver).</p>
-          </div>
-          <div>
-            <p className="text-[10px] font-bold text-green-700">Authenticator</p>
-            <p className="text-[9px] text-slate-500 italic">Dato temporal para evitar ataques de 'repetición'.</p>
-          </div>
-        </div>
-      </div>
-
-      {/* MODAL DE DETALLES TÉCNICOS */}
-      {showDetails && (
-        <div className="absolute inset-0 z-50 flex items-center justify-center p-6 bg-slate-900/40 backdrop-blur-sm">
-          <div className="bg-white w-full max-w-lg p-6 rounded-2xl shadow-2xl border border-slate-100 animate-in zoom-in-95 duration-200">
-            <div className="flex justify-between items-center mb-4 border-b pb-3">
-              <div className="flex items-center gap-2">
-                <div className="bg-blue-100 p-2 rounded-lg text-blue-600"><Binary size={20}/></div>
-                <h3 className="font-bold text-slate-800">Interior del Mensaje: {currentStepData.packet?.label}</h3>
-              </div>
-              <button onClick={() => setShowDetails(false)} className="bg-slate-100 hover:bg-red-50 p-1 rounded-full text-slate-400 hover:text-red-500 transition-colors">
-                <X size={20} />
-              </button>
+    <div class="max-w-6xl mx-auto bg-white rounded-3xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col relative">
+        
+        <!-- HEADER -->
+        <header class="p-6 border-b border-slate-100 flex flex-col md:flex-row justify-between items-center gap-4 bg-white z-10">
+            <div>
+                <h1 class="text-3xl font-black text-slate-800 tracking-tight flex items-center gap-3">
+                    <i data-lucide="shield-check" class="text-blue-600 w-8 h-8"></i>
+                    Kerberos <span class="text-blue-600">MasterClass</span>
+                </h1>
+                <p class="text-slate-400 text-sm font-medium">Simulación Interactiva de Seguridad en Active Directory</p>
             </div>
             
-            <div className="space-y-4 text-sm">
-               <div className="bg-slate-900 rounded-xl p-4 font-mono text-xs text-blue-300">
-                 <p className="text-slate-500 mb-2">// Estructura ASN.1</p>
-                 {currentStepData.details.fields.map((f, i) => (
-                   <div key={i} className="flex gap-2">
-                     <span className="text-blue-500">➜</span>
-                     <span>{f}</span>
-                   </div>
-                 ))}
-               </div>
-               <div className="flex items-start gap-3 bg-blue-50 p-3 rounded-xl border border-blue-100">
-                 <Unlock size={18} className="text-blue-600 mt-1 shrink-0" />
-                 <p className="text-xs text-blue-800 leading-relaxed">{currentStepData.details.logic}</p>
-               </div>
-               {currentStepData.details.attacks.length > 0 && (
-                 <div className="bg-red-50 p-3 rounded-xl border border-red-100">
-                   <h5 className="text-xs font-bold text-red-700 mb-2 flex items-center gap-1"><AlertTriangle size={14}/> Vulnerabilidad Asociada:</h5>
-                   {currentStepData.details.attacks.map((a, i) => (
-                     <p key={i} className="text-[11px] text-red-600"><span className="font-bold">{a.name}:</span> {a.desc}</p>
-                   ))}
-                 </div>
-               )}
+            <div class="flex bg-slate-100 p-1 rounded-xl shadow-inner border border-slate-200">
+                <button id="btn-mode-tech" onclick="setMode('technical')" class="flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition-all bg-white text-blue-600 shadow-sm">
+                    <i data-lucide="binary" class="w-3.5 h-3.5"></i> Modo Técnico
+                </button>
+                <button id="btn-mode-analogy" onclick="setMode('analogy')" class="flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition-all text-slate-500 hover:text-slate-700">
+                    <i data-lucide="layout" class="w-3.5 h-3.5"></i> Modo Estudiante
+                </button>
             </div>
-          </div>
-        </div>
-      )}
+        </header>
 
-      {/* HEADER DINÁMICO */}
-      <div className="w-full flex flex-col md:flex-row justify-between items-center mb-6 gap-4">
-        <div>
-          <h1 className="text-3xl font-black text-slate-800 tracking-tight flex items-center gap-2">
-            <ShieldCheck className="text-blue-600" size={32} />
-            Kerberos <span className="text-blue-600">MasterClass</span>
-          </h1>
-          <p className="text-slate-400 text-sm font-medium">Visualización Interactiva de Seguridad en Active Directory</p>
-        </div>
-        
-        {/* Selector de Modo Didáctico */}
-        <div className="flex bg-slate-200 p-1 rounded-xl shadow-inner">
-          <button 
-            onClick={() => setMode('technical')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition-all ${mode === 'technical' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
-          >
-            <Binary size={14} /> Modo Técnico
-          </button>
-          <button 
-            onClick={() => setMode('analogy')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition-all ${mode === 'analogy' ? 'bg-white text-orange-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
-          >
-            <Layout size={14} /> Modo Estudiante
-          </button>
-        </div>
-      </div>
-
-      {/* DIAGRAMA PRINCIPAL */}
-      <div className="relative w-full h-[400px] bg-white rounded-2xl border-2 border-slate-100 shadow-inner mb-6 overflow-hidden">
-        {/* Líneas de Conexión (SVG) */}
-        <svg className="absolute inset-0 w-full h-full pointer-events-none z-0 opacity-20">
-           <path d="M 120 260 C 120 150, 350 200, 400 120" stroke="#3b82f6" strokeWidth="2" fill="none" strokeDasharray="8,8" />
-           <path d="M 140 260 C 140 150, 550 200, 580 120" stroke="#3b82f6" strokeWidth="2" fill="none" strokeDasharray="8,8" />
-           <line x1="15%" y1="65%" x2="85%" y2="65%" stroke="#3b82f6" strokeWidth="2" strokeDasharray="8,8" />
-        </svg>
-
-        {/* KDC VISUAL BOX */}
-        <div className="absolute top-[5%] left-1/2 -translate-x-1/2 w-[400px] h-[180px] border-2 border-dashed border-blue-200 rounded-3xl bg-blue-50/20 backdrop-blur-[1px] flex flex-col items-center pt-2">
-            <span className="text-[10px] font-black text-blue-400 uppercase tracking-widest mb-2 bg-white px-3 py-1 border border-blue-100 rounded-full shadow-sm">Key Distribution Center (KDC)</span>
-            <div className="flex w-full justify-around items-center h-full pb-4">
-                {/* AS */}
-                <div className={`flex flex-col items-center p-3 rounded-2xl transition-all ${currentStepData.actors.as === 'active' ? 'bg-indigo-600 text-white shadow-xl scale-110' : 'bg-white text-slate-400 border border-slate-100'}`}>
-                    <Database size={28} />
-                    <span className="text-[11px] font-black mt-1">AS</span>
-                    <span className="text-[8px] opacity-60">Authentication</span>
-                </div>
-                {/* DATABASE */}
-                <div className="flex flex-col items-center opacity-30">
-                    <div className="p-2 bg-yellow-400 rounded-lg text-white"><Key size={20} /></div>
-                    <span className="text-[8px] font-bold mt-1 uppercase">NTDS.DIT</span>
-                </div>
-                {/* TGS */}
-                <div className={`flex flex-col items-center p-3 rounded-2xl transition-all ${currentStepData.actors.tgs === 'active' ? 'bg-indigo-600 text-white shadow-xl scale-110' : 'bg-white text-slate-400 border border-slate-100'}`}>
-                    <Ticket size={28} />
-                    <span className="text-[11px] font-black mt-1">TGS</span>
-                    <span className="text-[8px] opacity-60">Ticket Granting</span>
-                </div>
-            </div>
-        </div>
-
-        {/* CLIENTE */}
-        <div className={`absolute top-[65%] left-[12%] -translate-x-1/2 flex flex-col items-center transition-all ${currentStepData.actors.client === 'active' ? 'scale-110' : 'scale-100'}`}>
-            <div className={`w-24 h-24 rounded-2xl flex items-center justify-center border-4 bg-white transition-all ${currentStepData.actors.client === 'active' || currentStepData.actors.client === 'success' ? 'border-blue-500 text-blue-600 shadow-2xl' : 'border-slate-200 text-slate-300'}`}>
-                <User size={40} />
-            </div>
-            <div className="mt-3 text-center">
-                <p className="font-black text-sm text-slate-700 tracking-tight">Usuario (Client)</p>
-                <div className="flex gap-1 justify-center mt-2">
-                    {step >= 3 && <div className="p-1 bg-yellow-400 text-white rounded animate-in slide-in-from-top-2 duration-300"><Ticket size={14} /></div>}
-                    {step >= 5 && <div className="p-1 bg-green-500 text-white rounded animate-in slide-in-from-top-2 duration-300"><Key size={14} /></div>}
-                </div>
-            </div>
-        </div>
-
-        {/* SERVICIO */}
-        <div className={`absolute top-[65%] right-[12%] translate-x-1/2 flex flex-col items-center transition-all ${currentStepData.actors.service === 'success' ? 'scale-110' : 'scale-100'}`}>
-            <div className={`w-24 h-24 rounded-2xl flex items-center justify-center border-4 bg-white transition-all ${currentStepData.actors.service === 'success' ? 'border-green-500 text-green-600 shadow-2xl' : currentStepData.actors.service === 'waiting' ? 'border-orange-400 text-orange-500 animate-pulse' : 'border-slate-200 text-slate-300'}`}>
-                <Server size={40} />
-            </div>
-            <p className="mt-3 font-black text-sm text-slate-700 tracking-tight">File Server (AP)</p>
-        </div>
-
-        {/* PAQUETE ANIMADO */}
-        {currentStepData.packet && (
-            <div 
-                className="absolute z-30 cursor-pointer group"
-                style={getPacketPosition(currentStepData.packet, packetLocation)}
-                onClick={() => setShowDetails(true)}
-            >
-                <div className="relative flex flex-col items-center justify-center w-28 h-20 bg-white border-2 border-blue-600 rounded-2xl shadow-2xl group-hover:scale-110 transition-transform bg-gradient-to-br from-white to-blue-50 ring-4 ring-blue-500/10">
-                    <div className="flex items-center gap-2 text-blue-700 mb-1">
-                        {currentStepData.packet.icon}
-                        {currentStepData.packet.subIcon}
+        <div class="flex flex-1 relative">
+            <!-- SIDEBAR GLOSARIO -->
+            <aside class="w-48 p-5 border-r border-slate-100 bg-slate-50/50 hidden xl:block">
+                <h4 class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2">
+                    <i data-lucide="book-open" class="w-3 h-3"></i> Glosario
+                </h4>
+                <div class="space-y-5">
+                    <div>
+                        <p class="text-[10px] font-bold text-blue-700">NTLM Hash</p>
+                        <p class="text-[9px] text-slate-500 leading-relaxed">Contraseña 'disfrazada'. Nunca se envía en claro por la red.</p>
                     </div>
-                    <span className="text-[11px] font-black text-slate-700 tracking-tighter">{currentStepData.packet.label}</span>
-                    <span className="text-[8px] font-bold text-blue-500 mt-1 flex items-center gap-1">
-                        <MousePointer2 size={8} /> CLIC PARA ABRIR
-                    </span>
-                </div>
-            </div>
-        )}
-      </div>
-
-      {/* PANEL INFERIOR DIDÁCTICO */}
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-          
-          {/* DESCRIPCIÓN Y CONTROLES */}
-          <div className="lg:col-span-2 bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex flex-col justify-between">
-              <div>
-                <div className="flex justify-between items-center mb-4">
-                    <span className="px-3 py-1 bg-slate-900 text-white rounded-full text-xs font-black">ETAPA {step}</span>
-                    <div className="flex gap-2">
-                        <button onClick={handleReset} className="p-2 text-slate-400 hover:text-slate-800 transition-colors"><RefreshCw size={20}/></button>
-                        <button 
-                            onClick={handleNext} 
-                            disabled={step === steps.length - 1 || animating}
-                            className={`flex items-center gap-2 px-6 py-2 rounded-xl text-sm font-black transition-all shadow-lg ${step === steps.length - 1 ? 'bg-green-500 text-white' : 'bg-blue-600 hover:bg-blue-700 text-white active:scale-95'}`}
-                        >
-                            {step === steps.length - 1 ? 'Completado' : 'Siguiente'} <ArrowRight size={18}/>
-                        </button>
+                    <div>
+                        <p class="text-[10px] font-bold text-indigo-700">PAC</p>
+                        <p class="text-[9px] text-slate-500 leading-relaxed">Lista de tus privilegios y grupos de seguridad del dominio.</p>
+                    </div>
+                    <div>
+                        <p class="text-[10px] font-bold text-orange-700">SPN</p>
+                        <p class="text-[9px] text-slate-500 leading-relaxed">Nombre 'único' del servicio solicitado (ej: cifs/servidor).</p>
                     </div>
                 </div>
-                <h3 className="text-xl font-black text-slate-800 mb-2">{currentStepData.title}</h3>
-                <div className="p-4 bg-slate-50 rounded-xl border border-slate-100 min-h-[80px]">
-                    <p className="text-sm text-slate-600 leading-relaxed font-medium italic">
-                        {mode === 'analogy' ? currentStepData.analogy : currentStepData.desc}
-                    </p>
+            </aside>
+
+            <!-- CONTENIDO PRINCIPAL -->
+            <main class="flex-1 p-6 flex flex-col gap-6">
+                
+                <!-- DIAGRAMA -->
+                <div class="relative w-full h-[400px] bg-white rounded-3xl border border-slate-100 shadow-inner overflow-hidden select-none" id="diagram-container">
+                    <svg class="absolute inset-0 w-full h-full pointer-events-none opacity-20 z-0">
+                        <path d="M 120 260 C 120 150, 350 200, 400 120" stroke="#3b82f6" stroke-width="2" fill="none" stroke-dasharray="8,8" />
+                        <path d="M 140 260 C 140 150, 550 200, 580 120" stroke="#3b82f6" stroke-width="2" fill="none" stroke-dasharray="8,8" />
+                        <line x1="15%" y1="65%" x2="85%" y2="65%" stroke="#3b82f6" stroke-width="2" stroke-dasharray="8,8" />
+                    </svg>
+
+                    <!-- KDC BOX -->
+                    <div class="absolute top-[5%] left-1/2 -translate-x-1/2 w-[380px] h-[170px] border-2 border-dashed border-blue-100 rounded-[2.5rem] bg-blue-50/10 flex flex-col items-center pt-2">
+                        <span class="text-[9px] font-black text-blue-300 uppercase tracking-widest bg-white px-3 py-1 border border-blue-50 rounded-full shadow-sm mb-2">KDC</span>
+                        <div class="flex w-full justify-around items-center h-full pb-4">
+                            <div id="actor-as" class="actor-transition flex flex-col items-center p-3 rounded-2xl border-4 bg-white text-slate-300">
+                                <i data-lucide="database" class="w-7 h-7"></i>
+                                <span class="text-[10px] font-black mt-1 uppercase">AS</span>
+                            </div>
+                            <div class="flex flex-col items-center opacity-20 scale-75">
+                                <div class="p-2 bg-yellow-400 rounded-lg text-white"><i data-lucide="key" class="w-5 h-5"></i></div>
+                            </div>
+                            <div id="actor-tgs" class="actor-transition flex flex-col items-center p-3 rounded-2xl border-4 bg-white text-slate-300">
+                                <i data-lucide="ticket" class="w-7 h-7"></i>
+                                <span class="text-[10px] font-black mt-1 uppercase">TGS</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- CLIENTE -->
+                    <div class="absolute top-[65%] left-[12%] -translate-x-1/2 flex flex-col items-center">
+                        <div id="actor-client" class="actor-transition w-24 h-24 rounded-3xl flex items-center justify-center border-4 border-slate-200 bg-white text-slate-300 shadow-lg">
+                            <i data-lucide="user" class="w-10 h-10"></i>
+                        </div>
+                        <div class="mt-3 text-center">
+                            <p class="font-black text-sm text-slate-700">Usuario</p>
+                            <div id="client-inventory" class="flex gap-1 justify-center mt-2 h-6"></div>
+                        </div>
+                    </div>
+
+                    <!-- SERVICIO -->
+                    <div class="absolute top-[65%] right-[12%] translate-x-1/2 flex flex-col items-center">
+                        <div id="actor-service" class="actor-transition w-24 h-24 rounded-3xl flex items-center justify-center border-4 border-slate-200 bg-white text-slate-300 shadow-lg">
+                            <i data-lucide="server" class="w-10 h-10"></i>
+                        </div>
+                        <p class="mt-3 font-black text-sm text-slate-700">Servidor (AP)</p>
+                    </div>
+
+                    <!-- PAQUETE -->
+                    <div id="packet" onclick="showModal()" class="packet-transition absolute z-30 cursor-pointer hidden group">
+                        <div class="relative flex flex-col items-center justify-center w-28 h-20 bg-white border-2 border-blue-600 rounded-2xl shadow-2xl bg-gradient-to-br from-white to-blue-50 ring-4 ring-blue-500/10 hover:scale-105 transition-transform">
+                            <div id="packet-icons" class="flex items-center gap-2 text-blue-700 mb-1"></div>
+                            <span id="packet-label" class="text-[11px] font-black text-slate-700"></span>
+                            <span class="text-[7px] font-black text-blue-600 animate-pulse mt-1 uppercase">¡Clic para abrir!</span>
+                            <div class="absolute -top-1 -right-1 h-3 w-3 bg-blue-500 rounded-full animate-ping"></div>
+                        </div>
+                    </div>
                 </div>
-              </div>
-          </div>
 
-          {/* BÓVEDA DE SECRETOS (Didáctica de Claves) */}
-          <div className="lg:col-span-1 bg-slate-900 p-5 rounded-2xl border border-slate-800 shadow-xl flex flex-col">
-              <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-4 flex items-center gap-2 border-b border-slate-800 pb-2">
-                  <Lock size={14} className="text-yellow-500" /> Bóveda de Secretos
-              </h4>
-              <div className="flex-1 space-y-3">
-                  {Object.entries(currentStepData.vaults).map(([actor, items]) => (
-                      <div key={actor} className="flex flex-col gap-1">
-                          <span className="text-[9px] font-bold text-slate-500 uppercase">{actor === 'client' ? 'Usuario' : actor === 'kdc' ? 'Servidor AD' : 'Servicio'}</span>
-                          <div className="flex flex-wrap gap-1">
-                              {items.map((item, i) => (
-                                  <span key={i} className="px-2 py-0.5 bg-slate-800 text-[9px] text-slate-300 rounded border border-slate-700 flex items-center gap-1">
-                                      <Key size={8} className="text-yellow-600"/> {item}
-                                  </span>
-                              ))}
-                              {items.length === 0 && <span className="text-[9px] text-slate-600 italic">Sin claves</span>}
-                          </div>
-                      </div>
-                  ))}
-              </div>
-          </div>
+                <!-- CONTROLES -->
+                <div class="grid grid-cols-1 lg:grid-cols-4 gap-6">
+                    <div class="lg:col-span-2 bg-white p-6 rounded-2xl border border-slate-200 shadow-sm relative overflow-hidden">
+                        <div class="absolute top-0 left-0 h-1 bg-blue-100 w-full">
+                            <div id="progress-bar" class="h-full bg-blue-600 step-indicator-transition" style="width: 0%"></div>
+                        </div>
+                        <div class="flex justify-between items-center mb-4 pt-2">
+                            <span id="step-badge" class="px-3 py-1 bg-slate-900 text-white rounded-full text-[10px] font-black tracking-widest">ETAPA 0</span>
+                            <div class="flex gap-2">
+                                <button onclick="reset()" class="p-2 text-slate-300 hover:text-slate-800 transition-colors"><i data-lucide="refresh-cw" class="w-5 h-5"></i></button>
+                                <button id="btn-next" onclick="next()" class="flex items-center gap-2 px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-black shadow-lg">
+                                    Siguiente <i data-lucide="arrow-right" class="w-4 h-4"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <h3 id="step-title" class="text-xl font-black text-slate-800 mb-2">Estado Inicial</h3>
+                        <div class="p-4 bg-slate-50 rounded-xl border border-slate-100 min-h-[90px]">
+                            <p id="step-desc" class="text-sm text-slate-600 leading-relaxed font-medium italic"></p>
+                        </div>
+                    </div>
 
-          {/* CIFRADO ACTIVO */}
-          <div className="lg:col-span-1 bg-blue-600 p-5 rounded-2xl shadow-xl flex flex-col justify-center border border-blue-500">
-              <h4 className="text-[10px] font-black text-blue-200 uppercase tracking-widest mb-3 flex items-center gap-2">
-                  <Shield size={14} /> Lógica de Seguridad
-              </h4>
-              <p className="text-xs text-blue-50 font-medium leading-relaxed">
-                  {currentStepData.keysInfo}
-              </p>
-              <div className="mt-4 p-2 bg-blue-700 rounded-lg text-[10px] text-blue-200 flex items-center gap-2">
-                  <Info size={12} />
-                  <span>Criptografía de Clave Simétrica</span>
-              </div>
-          </div>
+                    <div class="lg:col-span-1 bg-slate-900 p-5 rounded-2xl shadow-xl flex flex-col">
+                        <h4 class="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-4 flex items-center gap-2 border-b border-slate-800 pb-2">
+                            <i data-lucide="lock" class="w-3 h-3 text-yellow-500"></i> Bóveda
+                        </h4>
+                        <div id="vault-content" class="space-y-4 flex-1"></div>
+                    </div>
 
-      </div>
-      
-      {/* BARRA DE PROGRESO INFERIOR */}
-      <div className="mt-6 flex justify-between gap-1">
-          {steps.map((s, i) => (
-              <div 
-                key={i} 
-                className={`h-1.5 flex-1 rounded-full transition-all duration-500 ${i <= step ? 'bg-blue-600' : 'bg-slate-200'}`}
-              ></div>
-          ))}
-      </div>
+                    <div class="lg:col-span-1 bg-blue-600 p-5 rounded-2xl shadow-xl flex flex-col justify-center border border-blue-500">
+                        <h4 class="text-[10px] font-black text-blue-200 uppercase tracking-widest mb-3 flex items-center gap-2">
+                            <i data-lucide="shield" class="w-3 h-3"></i> Seguridad
+                        </h4>
+                        <p id="keys-info" class="text-xs text-blue-50 font-medium leading-relaxed"></p>
+                    </div>
+                </div>
+            </main>
+        </div>
     </div>
-  );
-};
 
-export default KerberosFlow;
+    <!-- MODAL -->
+    <div id="modal" class="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-slate-900/60 backdrop-blur-sm hidden" onclick="if(event.target === this) hideModal()">
+        <div class="bg-white w-full max-w-lg p-6 rounded-3xl shadow-2xl border border-slate-100 transform transition-transform" onclick="event.stopPropagation()">
+            <div class="flex justify-between items-center mb-5 border-b pb-4">
+                <h3 id="modal-title" class="font-black text-slate-800 uppercase tracking-tight">Detalles</h3>
+                <button onclick="hideModal()" class="text-slate-400 hover:text-red-500"><i data-lucide="x" class="w-5 h-5"></i></button>
+            </div>
+            <div id="modal-fields" class="bg-slate-900 rounded-2xl p-4 font-mono text-[11px] text-blue-300 mb-4"></div>
+            <div class="bg-blue-50 p-4 rounded-2xl border border-blue-100 text-xs text-blue-800" id="modal-logic"></div>
+        </div>
+    </div>
+
+    <script>
+        const steps = [
+            {
+                title: "Estado Inicial", phase: "Configuración",
+                desc: "El KDC, el Usuario y el Servicio están listos con sus respectivos secretos compartidos.",
+                analogy: "Estás en la entrada del parque. Tienes tu DNI pero ninguna entrada.",
+                keysInfo: "Hashes NTLM: Son los secretos que permiten confiar sin enviar contraseñas por la red.",
+                actors: { client: 'idle', as: 'idle', tgs: 'idle', service: 'idle' },
+                vaults: { client: ["Pass Usuario"], kdc: ["Hash Usuario", "Hash krbtgt", "Hash Servicio"], service: ["Hash Servicio"] }
+            },
+            {
+                title: "KRB_AS_REQ", packet: { from: 'client', to: 'as', label: 'AS_REQ', icon: 'user' },
+                phase: "Identificación",
+                desc: "El cliente solicita un TGT enviando un timestamp cifrado con su propia clave.",
+                analogy: "Ventanilla 1: Enseñas tu DNI para demostrar quién eres.",
+                keysInfo: "🔐 Cifrado con Hash NTLM del Usuario.",
+                actors: { client: 'active', as: 'waiting', tgs: 'idle', service: 'idle' },
+                vaults: { client: ["Pass Usuario"], kdc: ["Hash Usuario", "Hash krbtgt"], service: ["Hash Servicio"] },
+                details: { fields: ["cname: username", "padata: timestamp cifrado"], logic: "Si el AS puede descifrarlo, sabe que el usuario conoce la contraseña." }
+            },
+            {
+                title: "KRB_AS_REP", packet: { from: 'as', to: 'client', label: 'AS_REP', icon: 'lock', subIcon: 'ticket' },
+                phase: "Entrega de TGT",
+                desc: "El AS entrega el TGT (Ticket Granting Ticket) y una Session Key.",
+                analogy: "La Ventanilla 1 te da una pulsera sellada (TGT) que no puedes abrir.",
+                keysInfo: "🔑 Clave Maestra: Hash 'krbtgt'. Solo el KDC puede leer el TGT.",
+                actors: { client: 'waiting', as: 'active', tgs: 'idle', service: 'idle' },
+                vaults: { client: ["TGT", "Logon Session Key"], kdc: ["Hash krbtgt"], service: ["Hash Servicio"] },
+                details: { fields: ["TGT (Cifrado con krbtgt)", "Session Key (Cifrada con User Hash)"], logic: "El TGT otorga permiso para pedir más tickets sin volver a loguearse." }
+            },
+            {
+                title: "KRB_TGS_REQ", packet: { from: 'client', to: 'tgs', label: 'TGS_REQ', icon: 'ticket' },
+                phase: "Pedir Ticket Servicio",
+                desc: "El cliente presenta el TGT para solicitar acceso a un servicio específico.",
+                analogy: "Ventanilla 2: Enseñas tu pulsera y pides un ticket para la Montaña Rusa.",
+                keysInfo: "🔓 El TGS usa el Hash 'krbtgt' para abrir el TGT y verificar tu identidad.",
+                actors: { client: 'active', as: 'idle', tgs: 'waiting', service: 'idle' },
+                vaults: { client: ["TGT", "Session Key"], kdc: ["Hash krbtgt"], service: ["Hash Servicio"] },
+                details: { fields: ["TGT", "Authenticator", "Service Name"], logic: "El KDC comprueba si tienes permiso para ese servicio." }
+            },
+            {
+                title: "KRB_TGS_REP", packet: { from: 'tgs', to: 'client', label: 'TGS_REP', icon: 'file-text', subIcon: 'key' },
+                phase: "Entrega Ticket Servicio",
+                desc: "El TGS entrega el Service Ticket cifrado con la clave del servidor destino.",
+                analogy: "La Ventanilla 2 te da el ticket físico para la atracción.",
+                keysInfo: "🔐 Cifrado con Hash del Servicio. Solo el servidor destino podrá abrirlo.",
+                actors: { client: 'waiting', as: 'idle', tgs: 'active', service: 'idle' },
+                vaults: { client: ["Service Ticket", "Service Session Key"], kdc: ["Hash Servicio"], service: ["Hash Servicio"] },
+                details: { fields: ["ST (Cifrado con Service Key)", "Service Session Key"], logic: "El ticket contiene tus privilegios (PAC) firmados por el KDC." }
+            },
+            {
+                title: "KRB_AP_REQ", packet: { from: 'client', to: 'service', label: 'AP_REQ', icon: 'shield' },
+                phase: "Acceso al Recurso",
+                desc: "El cliente envía el Service Ticket al servidor final para acceder.",
+                analogy: "Entregas el ticket al operario de la Montaña Rusa.",
+                keysInfo: "🔓 El servidor usa su propia clave para abrir el ticket y ver tu PAC.",
+                actors: { client: 'active', as: 'idle', tgs: 'idle', service: 'waiting' },
+                vaults: { client: ["Service Ticket"], service: ["Hash Servicio"] },
+                details: { fields: ["ST", "Authenticator"], logic: "El servidor confía en el ticket porque solo el KDC pudo haberlo cifrado." }
+            },
+            {
+                title: "Acceso Concedido", packet: { from: 'service', to: 'client', label: 'AP_REP', icon: 'check-circle' },
+                phase: "Finalización",
+                desc: "¡Autenticación completada con éxito!",
+                analogy: "¡Ya estás disfrutando de la atracción!",
+                keysInfo: "Confianza mutua establecida. Sesión segura activa.",
+                actors: { client: 'success', as: 'idle', tgs: 'idle', service: 'success' },
+                vaults: { client: ["Sesión OK"], service: ["Identidad OK"] },
+                details: { fields: ["Confirmación de tiempo"], logic: "Se establece la comunicación segura entre cliente y servidor." }
+            }
+        ];
+
+        let currentStep = 0;
+        let mode = 'technical';
+        let isAnimating = false;
+
+        const positions = {
+            client: { left: '10%', top: '65%' },
+            as: { left: '42%', top: '25%' },
+            tgs: { left: '58%', top: '25%' },
+            service: { left: '90%', top: '65%' }
+        };
+
+        function setMode(newMode) {
+            mode = newMode;
+            document.getElementById('btn-mode-tech').className = `flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition-all ${mode==='technical'?'bg-white text-blue-600 shadow-sm':'text-slate-500'}`;
+            document.getElementById('btn-mode-analogy').className = `flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition-all ${mode==='analogy'?'bg-white text-orange-600 shadow-sm':'text-slate-500'}`;
+            updateUI();
+        }
+
+        function updateActor(id, state) {
+            const el = document.getElementById(`actor-${id}`);
+            if (!el) return;
+            
+            // Limpiar clases de estado previas
+            el.classList.remove('actor-idle', 'actor-active', 'actor-waiting', 'actor-success', 'border-slate-200', 'text-slate-300', 'border-blue-500', 'text-blue-600', 'shadow-2xl', 'scale-110', 'border-orange-400', 'text-orange-500', 'animate-pulse', 'border-green-500', 'text-green-600');
+            
+            // Añadir clase base y de estado
+            if (state === 'active') el.classList.add('border-blue-500', 'text-blue-600', 'shadow-2xl', 'scale-110');
+            else if (state === 'waiting') el.classList.add('border-orange-400', 'text-orange-500', 'animate-pulse');
+            else if (state === 'success') el.classList.add('border-green-500', 'text-green-600', 'shadow-2xl', 'scale-110');
+            else el.classList.add('border-slate-200', 'text-slate-300');
+        }
+
+        function updateUI() {
+            const data = steps[currentStep];
+            document.getElementById('step-badge').innerText = `ETAPA ${currentStep}`;
+            document.getElementById('step-title').innerText = data.title;
+            document.getElementById('step-desc').innerText = mode === 'analogy' ? data.analogy : data.desc;
+            document.getElementById('keys-info').innerText = data.keysInfo;
+            document.getElementById('progress-bar').style.width = `${(currentStep / (steps.length - 1)) * 100}%`;
+            
+            updateActor('as', data.actors.as);
+            updateActor('tgs', data.actors.tgs);
+            updateActor('client', data.actors.client);
+            updateActor('service', data.actors.service);
+
+            const vault = document.getElementById('vault-content');
+            vault.innerHTML = '';
+            Object.entries(data.vaults).forEach(([actor, items]) => {
+                let html = `<div class="flex flex-col gap-1"><span class="text-[9px] font-bold text-slate-500 uppercase">${actor}</span><div class="flex flex-wrap gap-1">`;
+                items.forEach(it => html += `<span class="px-2 py-0.5 bg-slate-800 text-[9px] text-slate-300 rounded border border-slate-700 flex items-center gap-1"><i data-lucide="key" class="w-2 h-2 text-yellow-500"></i>${it}</span>`);
+                vault.innerHTML += html + `</div></div>`;
+            });
+
+            const inv = document.getElementById('client-inventory');
+            inv.innerHTML = '';
+            if (currentStep >= 3) inv.innerHTML += `<div class="p-1 bg-yellow-400 text-white rounded"><i data-lucide="ticket" class="w-3 h-3"></i></div>`;
+            if (currentStep >= 5) inv.innerHTML += `<div class="p-1 bg-green-500 text-white rounded"><i data-lucide="key" class="w-3 h-3"></i></div>`;
+
+            handlePacket();
+            lucide.createIcons();
+        }
+
+        function handlePacket() {
+            const pkt = steps[currentStep].packet;
+            const pEl = document.getElementById('packet');
+            if (!pkt) { pEl.classList.add('hidden'); return; }
+            pEl.classList.remove('hidden');
+            document.getElementById('packet-label').innerText = pkt.label;
+            document.getElementById('packet-icons').innerHTML = `<i data-lucide="${pkt.icon}" class="w-4 h-4"></i>`;
+            
+            const start = positions[pkt.from];
+            const end = positions[pkt.to];
+            pEl.style.transition = 'none';
+            pEl.style.left = start.left; pEl.style.top = start.top; pEl.style.opacity = '0';
+
+            setTimeout(() => {
+                isAnimating = true;
+                pEl.style.transition = 'all 1s cubic-bezier(0.4, 0, 0.2, 1)';
+                pEl.style.left = end.left; pEl.style.top = end.top; pEl.style.opacity = '1';
+                setTimeout(() => { isAnimating = false; lucide.createIcons(); }, 1000);
+            }, 50);
+        }
+
+        function next() { if (currentStep < steps.length - 1 && !isAnimating) { currentStep++; updateUI(); } }
+        function reset() { currentStep = 0; updateUI(); }
+        function showModal() {
+            const d = steps[currentStep].details;
+            if (!d) return;
+            document.getElementById('modal-fields').innerHTML = d.fields.map(f => `<div>➜ ${f}</div>`).join('');
+            document.getElementById('modal-logic').innerText = d.logic;
+            document.getElementById('modal').classList.remove('hidden');
+            lucide.createIcons();
+        }
+        function hideModal() { document.getElementById('modal').classList.add('hidden'); }
+
+        window.onload = () => updateUI();
+    </script>
+</body>
+</html>
