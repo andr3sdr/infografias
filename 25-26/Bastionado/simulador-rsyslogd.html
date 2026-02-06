@@ -19,6 +19,11 @@
             --comp-rsyslog: #89b4fa;
             --comp-file: #fab387;
             --comp-network: #cba6f7;
+            
+            /* Colores Inspector */
+            --insp-pri: #f5c2e7;
+            --insp-header: #89dceb;
+            --insp-msg: #cba6f7;
         }
 
         body {
@@ -55,19 +60,16 @@
         #console {
             position: relative;
             width: 900px;
-            height: 120px;
+            height: 100px;
             background: #11111b;
             border: 1px solid #45475a;
             border-top: 1px solid #313244;
-            border-radius: 0 0 12px 12px;
             padding: 15px;
             box-sizing: border-box;
             font-family: 'Courier New', monospace;
             font-size: 0.85em;
             color: #a6adc8;
             overflow-y: auto;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
-            margin-bottom: 25px;
             display: flex;
             flex-direction: column-reverse;
         }
@@ -78,6 +80,58 @@
             padding-bottom: 2px; 
             flex-shrink: 0;
         }
+
+        /* --- 3. INSPECTOR DE PROTOCOLO (NUEVO) --- */
+        #inspector {
+            width: 900px;
+            background: #232433;
+            border: 1px solid #45475a;
+            border-top: none;
+            border-radius: 0 0 12px 12px;
+            padding: 20px;
+            box-sizing: border-box;
+            margin-bottom: 25px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            display: grid;
+            grid-template-columns: 1fr 2fr;
+            gap: 20px;
+        }
+
+        .insp-col h4 { margin: 0 0 10px 0; color: #9399b2; font-size: 0.8em; text-transform: uppercase; }
+        
+        /* Títulos Clicables */
+        .clickable-title { 
+            cursor: pointer; 
+            text-decoration: underline; 
+            text-decoration-style: dotted; 
+            transition: color 0.2s;
+        }
+        .clickable-title:hover { color: #fff; text-decoration-style: solid; }
+        .info-icon { font-size: 1.1em; margin-left: 5px; opacity: 0.7; }
+
+        .calc-box {
+            background: #181825;
+            padding: 10px;
+            border-radius: 6px;
+            border: 1px solid #45475a;
+            font-family: monospace;
+            font-size: 0.9em;
+        }
+
+        .raw-msg {
+            background: #11111b;
+            padding: 10px;
+            border-radius: 6px;
+            border: 1px solid #45475a;
+            font-family: 'Courier New', monospace;
+            font-size: 0.95em;
+            word-break: break-all;
+            color: #fff;
+        }
+
+        .tag-pri { color: var(--insp-pri); font-weight: bold; }
+        .tag-header { color: var(--insp-header); }
+        .tag-msg { color: var(--insp-msg); }
 
         /* Nodos Generales */
         .node {
@@ -94,45 +148,20 @@
             box-shadow: 0 4px 6px rgba(0,0,0,0.2);
             transition: transform 0.2s, box-shadow 0.2s;
         }
-        
         .node-icon { font-size: 1.5em; display: block; margin-bottom: 5px; }
 
-        /* --- NODO INTERACTIVO (RSYSLOGD) --- */
+        /* Nodo Interactivo */
         #daemon-rsyslog { 
             top: 170px; left: 350px; 
             width: 160px; height: 120px;
             border-color: var(--comp-rsyslog);
             background: #2a2b3d;
             display: flex; flex-direction: column; justify-content: center;
-            cursor: pointer; /* Indicar clic */
+            cursor: pointer;
             animation: breathe 3s infinite ease-in-out;
         }
-
-        #daemon-rsyslog:hover {
-            transform: scale(1.05);
-            box-shadow: 0 0 15px var(--comp-rsyslog);
-            background: #36384a;
-        }
-
-        #daemon-rsyslog::after {
-            content: "👆 Clic para configurar";
-            position: absolute;
-            top: -25px;
-            left: 50%;
-            transform: translateX(-50%);
-            background: var(--comp-rsyslog);
-            color: #1e1e2e;
-            padding: 2px 8px;
-            border-radius: 4px;
-            font-size: 0.75em;
-            white-space: nowrap;
-            opacity: 0;
-            transition: opacity 0.3s;
-            pointer-events: none;
-        }
-
-        #daemon-rsyslog:hover::after { opacity: 1; }
-
+        #daemon-rsyslog:hover { transform: scale(1.05); background: #36384a; }
+        
         @keyframes breathe {
             0%, 100% { border-color: var(--comp-rsyslog); }
             50% { border-color: #b4befe; }
@@ -155,78 +184,7 @@
             transition: all 0.3s;
         }
 
-        /* --- VENTANA MODAL DE CONFIGURACIÓN --- */
-        .modal {
-            display: none; 
-            position: fixed; 
-            z-index: 100; 
-            left: 0;
-            top: 0;
-            width: 100%; 
-            height: 100%; 
-            background-color: rgba(0,0,0,0.7); 
-            backdrop-filter: blur(5px);
-        }
-
-        .modal-content {
-            background-color: #1e1e2e;
-            margin: 10% auto; 
-            padding: 25px;
-            border: 1px solid #45475a;
-            border-radius: 12px;
-            width: 500px;
-            box-shadow: 0 15px 40px rgba(0,0,0,0.8);
-            position: relative;
-        }
-
-        .close-btn {
-            color: #aaa;
-            float: right;
-            font-size: 28px;
-            font-weight: bold;
-            cursor: pointer;
-        }
-        .close-btn:hover { color: #fff; }
-
-        .rule-row {
-            background: #313244;
-            padding: 10px;
-            margin: 10px 0;
-            border-radius: 6px;
-            display: flex;
-            align-items: center;
-            border-left: 4px solid transparent;
-            transition: border-left-color 0.2s;
-        }
-        
-        .rule-row:hover { background: #3a3c52; }
-        .rule-row.active { border-left-color: var(--sev-info); }
-        .rule-row.inactive { border-left-color: #45475a; opacity: 0.6; }
-
-        input[type="checkbox"] {
-            transform: scale(1.5);
-            margin-right: 15px;
-            cursor: pointer;
-        }
-
-        label { 
-            font-family: 'Courier New', monospace; 
-            font-size: 1.1em;
-            cursor: pointer;
-            width: 100%;
-        }
-
-        .info-box {
-            background: #232433;
-            border: 1px solid #89b4fa;
-            color: #cdd6f4;
-            padding: 10px;
-            font-size: 0.9em;
-            border-radius: 6px;
-            margin-top: 20px;
-        }
-
-        /* --- 3. PANEL DE CONTROL --- */
+        /* --- 4. PANEL DE CONTROL --- */
         #controls {
             display: grid;
             grid-template-columns: 1fr 1fr 1fr;
@@ -234,14 +192,12 @@
             width: 900px;
             flex-shrink: 0;
         }
-
         .control-group {
             background: #313244;
             padding: 15px;
             border-radius: 10px;
             border: 1px solid #45475a;
         }
-
         .control-title {
             font-size: 0.8em;
             text-transform: uppercase;
@@ -252,7 +208,6 @@
             border-bottom: 1px solid #45475a;
             padding-bottom: 5px;
         }
-
         button {
             display: block;
             width: 100%;
@@ -297,15 +252,35 @@
             font-weight: bold;
         }
 
+        /* Modales */
+        .modal {
+            display: none; position: fixed; z-index: 100; left: 0; top: 0;
+            width: 100%; height: 100%; background-color: rgba(0,0,0,0.7); backdrop-filter: blur(5px);
+        }
+        .modal-content {
+            background-color: #1e1e2e; margin: 10% auto; padding: 25px;
+            border: 1px solid #45475a; border-radius: 12px; width: 500px;
+            box-shadow: 0 15px 40px rgba(0,0,0,0.8); position: relative;
+        }
+        .modal-text p { margin-bottom: 10px; line-height: 1.5; font-size: 0.95em; }
+        .modal-text ul { margin: 5px 0 15px 20px; color: #a6adc8; font-size: 0.9em; }
+        .close-btn { color: #aaa; float: right; font-size: 28px; font-weight: bold; cursor: pointer; }
+        .close-btn:hover { color: #fff; }
+        
+        .rule-row {
+            background: #313244; padding: 10px; margin: 10px 0; border-radius: 6px;
+            display: flex; align-items: center; border-left: 4px solid transparent;
+        }
+        .rule-row.active { border-left-color: var(--sev-info); }
+        .rule-row.inactive { border-left-color: #45475a; opacity: 0.6; }
+        input[type="checkbox"] { transform: scale(1.5); margin-right: 15px; cursor: pointer; }
+        label { font-family: 'Courier New', monospace; font-size: 1.1em; cursor: pointer; width: 100%; }
+
         /* Canvas */
         #anim-canvas {
-            position: absolute;
-            top: 0; left: 0; width: 100%; height: 100%;
-            pointer-events: none;
-            z-index: 1;
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            pointer-events: none; z-index: 1;
         }
-
-        /* Animaciones CSS */
         .pulse { animation: pulse 0.4s ease-out; }
         @keyframes pulse {
             0% { transform: scale(1); box-shadow: 0 0 0 rgba(255,255,255,0); }
@@ -317,7 +292,7 @@
 <body>
 
     <h2>Laboratorio de Logs Linux</h2>
-    <p class="subtitle">Simula eventos y modifica las reglas de rsyslog haciendo clic en el nodo central</p>
+    <p class="subtitle">Simula eventos y observa el cálculo del protocolo Syslog (RFC 5424)</p>
 
     <!-- 1. DIAGRAMA VISUAL -->
     <div id="diagram-container">
@@ -326,153 +301,167 @@
         <!-- Entradas -->
         <div id="input-ssh" class="node">
             <span class="node-icon">🔒</span>
-            AUTH / PRIV
-            <div style="font-size:0.7em; color:#f9e2af">Logins, Sudo</div>
+            AUTH (4)
+            <div style="font-size:0.7em; color:#f9e2af">Warn (4)</div>
         </div>
         <div id="input-kernel" class="node">
             <span class="node-icon">⚙️</span>
-            KERN
-            <div style="font-size:0.7em; color:#f38ba8">Hardware, Drivers</div>
+            KERN (0)
+            <div style="font-size:0.7em; color:#f38ba8">Err (3)</div>
         </div>
         <div id="input-app" class="node">
             <span class="node-icon">📱</span>
-            DAEMON / USER
-            <div style="font-size:0.7em; color:#a6e3a1">Apps, Cron</div>
+            DAEMON (3)
+            <div style="font-size:0.7em; color:#a6e3a1">Info (6)</div>
         </div>
 
-        <!-- Procesador (AHORA INTERACTIVO) -->
+        <!-- Procesador -->
         <div id="daemon-rsyslog" class="node" onclick="openConfigModal()">
             <span class="node-icon">🔄</span>
             RSYSLOGD
-            <div id="rules-display" style="font-size:0.7em; margin-top:5px; color:#fff">
-                <!-- Se rellena por JS -->
-            </div>
+            <div id="rules-display" style="font-size:0.7em; margin-top:5px; color:#fff"></div>
         </div>
 
-        <!-- Salidas Locales -->
-        <div id="file-auth" class="node">
-            📄 auth.log
-        </div>
-        <div id="file-kern" class="node">
-            📄 kern.log
-        </div>
-        <div id="file-syslog" class="node">
-            📄 syslog
-        </div>
+        <!-- Salidas -->
+        <div id="file-auth" class="node">📄 auth.log</div>
+        <div id="file-kern" class="node">📄 kern.log</div>
+        <div id="file-syslog" class="node">📄 syslog</div>
 
-        <!-- Salida Remota -->
         <div id="out-network" class="node" style="opacity: 0.5;">
             <span class="node-icon">🌐</span>
             Servidor Remoto
-            <div style="font-size:0.7em; margin-top:5px;">Destino de Logs Centralizado</div>
+            <div style="font-size:0.7em; margin-top:5px;">TCP/UDP</div>
         </div>
     </div>
 
-    <!-- 2. CONSOLA DE LOGS -->
+    <!-- 2. CONSOLA -->
     <div id="console">
-        <div class="log-line" style="color:#89b4fa">> Sistema listo. Haz clic en 'RSYSLOGD' para ver la configuración.</div>
+        <div class="log-line" style="color:#89b4fa">> Sistema listo. Esperando eventos...</div>
     </div>
 
-    <!-- 3. PANEL DE CONTROL -->
+    <!-- 3. INSPECTOR DE PROTOCOLO -->
+    <div id="inspector">
+        <div class="insp-col">
+            <h4 class="clickable-title" onclick="openModal('pri')">Cálculo de Prioridad (PRI) <span class="info-icon">ⓘ</span></h4>
+            <div class="calc-box" id="insp-calc">
+                (Facility * 8) + Severity = PRI<br>
+                <span style="color:#7f849c; font-size:0.9em">Esperando datos...</span>
+            </div>
+        </div>
+        <div class="insp-col">
+            <h4 class="clickable-title" onclick="openModal('msg')">Estructura del Mensaje (RFC 5424) <span class="info-icon">ⓘ</span></h4>
+            <div class="raw-msg" id="insp-raw">
+                <span class="tag-pri">&lt;PRI&gt;</span><span class="tag-header">TIMESTAMP HOST APP:</span> <span class="tag-msg">MESSAGE</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- 4. CONTROLES -->
     <div id="controls">
-        <!-- Generador -->
         <div class="control-group">
             <span class="control-title">1. Generar Eventos</span>
-            <button class="btn-ssh" onclick="spawnLog('auth', 'warn')">Simular: Login Fallido (SSH)</button>
-            <button class="btn-kern" onclick="spawnLog('kern', 'err')">Simular: Error Disco (Kernel)</button>
-            <button class="btn-app" onclick="spawnLog('daemon', 'info')">Simular: Tarea Cron (Info)</button>
+            <!-- facility: auth(4), kern(0), daemon(3) -->
+            <!-- severity: warn(4), err(3), info(6) -->
+            <button class="btn-ssh" onclick="spawnLog('auth', 4, 'warn', 4)">Simular: Login Fallido (SSH)</button>
+            <button class="btn-kern" onclick="spawnLog('kern', 0, 'err', 3)">Simular: Error Disco (Kernel)</button>
+            <button class="btn-app" onclick="spawnLog('daemon', 3, 'info', 6)">Simular: Tarea Cron (Info)</button>
         </div>
 
-        <!-- Configuración Remota -->
         <div class="control-group">
             <span class="control-title">2. Configuración Remota</span>
-            <div style="font-size: 0.85em; margin-bottom: 5px;">¿Enviar copias al servidor?</div>
             <button id="btn-toggle-remote" onclick="toggleRemote()" style="background:#45475a; color:white;">Activar Envío Remoto</button>
-            
             <div id="proto-selector" style="opacity: 0.3; pointer-events: none;">
-                <div style="font-size: 0.85em; margin-top: 10px;">Protocolo de Transporte:</div>
                 <div class="proto-switch">
-                    <div class="proto-opt active" id="opt-udp" onclick="setProto('udp')">UDP (Rápido/Inseguro)</div>
-                    <div class="proto-opt" id="opt-tcp" onclick="setProto('tcp')">TCP (Lento/Fiable)</div>
+                    <div class="proto-opt active" id="opt-udp" onclick="setProto('udp')">UDP</div>
+                    <div class="proto-opt" id="opt-tcp" onclick="setProto('tcp')">TCP</div>
                 </div>
             </div>
         </div>
 
-        <!-- Leyenda -->
         <div class="control-group">
-            <span class="control-title">Leyenda Pedagógica</span>
+            <span class="control-title">Leyenda</span>
             <div style="font-size: 0.8em; line-height: 1.6;">
-                <span style="color:var(--sev-err)">● Rojo:</span> Severidad Alta (Error/Crit)<br>
-                <span style="color:var(--sev-warn)">● Amarillo:</span> Severidad Media (Warning)<br>
-                <span style="color:var(--sev-info)">● Verde:</span> Informativo (Info/Debug)<br>
-                <br>
-                <i>Nota: En modo UDP, observarás pérdida de paquetes aleatoria simulada.</i>
+                <span style="color:var(--sev-err)">● Rojo:</span> Error/Crit<br>
+                <span style="color:var(--sev-warn)">● Amarillo:</span> Warning<br>
+                <span style="color:var(--sev-info)">● Verde:</span> Info
             </div>
         </div>
     </div>
 
-    <!-- 4. MODAL DE CONFIGURACIÓN -->
+    <!-- Modal Config -->
     <div id="configModal" class="modal">
         <div class="modal-content">
-            <span class="close-btn" onclick="closeConfigModal()">&times;</span>
+            <span class="close-btn" onclick="closeModal('configModal')">&times;</span>
             <h3 style="margin-top:0">Configuración: /etc/rsyslog.conf</h3>
-            <p style="color:#a6adc8; font-size:0.9em">Activa o desactiva reglas para ver cómo afecta al ruteo de logs.</p>
-
-            <!-- Regla AUTH -->
             <div class="rule-row active" id="row-auth">
                 <input type="checkbox" id="chk-auth" checked onchange="updateRules()">
-                <label for="chk-auth">
-                    <span style="color:var(--sev-warn)">auth,authpriv.*</span> 
-                    <span style="color:#aaa">&nbsp;&nbsp;/var/log/auth.log</span>
-                </label>
+                <label>auth,authpriv.* &nbsp;&nbsp;/var/log/auth.log</label>
             </div>
-
-            <!-- Regla KERN -->
             <div class="rule-row active" id="row-kern">
                 <input type="checkbox" id="chk-kern" checked onchange="updateRules()">
-                <label for="chk-kern">
-                    <span style="color:var(--sev-err)">kern.*</span> 
-                    <span style="color:#aaa">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;/var/log/kern.log</span>
-                </label>
+                <label>kern.* &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;/var/log/kern.log</label>
             </div>
-
-            <!-- Regla DEFAULT -->
             <div class="rule-row active" style="opacity:0.8">
                 <input type="checkbox" checked disabled>
-                <label>
-                    <span style="color:var(--sev-info)">*.*</span> 
-                    <span style="color:#aaa">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;/var/log/syslog</span>
-                </label>
+                <label>*.* &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;/var/log/syslog</label>
             </div>
+        </div>
+    </div>
 
-            <div class="info-box">
-                <strong>¿Qué ocurre si desactivo una regla?</strong><br>
-                Rsyslog procesa las reglas en orden. Si desactivas la regla específica (ej. auth), los mensajes no desaparecen; "caen" hasta la regla genérica (*.*) y se guardan en <code>syslog</code>.
+    <!-- Modal Info PRI -->
+    <div id="modalPri" class="modal">
+        <div class="modal-content">
+            <span class="close-btn" onclick="closeModal('modalPri')">&times;</span>
+            <h3 style="margin-top:0">Cálculo de Prioridad (PRI)</h3>
+            <div class="modal-text">
+                <p>El valor de prioridad (PRI) es un número que permite a rsyslog clasificar rápidamente la importancia de un mensaje. Se obtiene combinando dos valores:</p>
+                <ul>
+                    <li><strong>Facility (Instalación):</strong> Código numérico que indica el origen (0=Kernel, 4=Auth, 3=Daemon, etc.).</li>
+                    <li><strong>Severity (Gravedad):</strong> Nivel de urgencia (0=Emergency ... 7=Debug).</li>
+                </ul>
+                <div class="calc-box" style="text-align:center; margin: 15px 0;">
+                    (Facility Code * 8) + Severity = PRI
+                </div>
+                <p>Ejemplo: Un mensaje de autenticación (4) de advertencia (4) sería: <br><code>(4 * 8) + 4 = 36</code></p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Info Header -->
+    <div id="modalMsg" class="modal">
+        <div class="modal-content">
+            <span class="close-btn" onclick="closeModal('modalMsg')">&times;</span>
+            <h3 style="margin-top:0">Estructura del Mensaje (RFC 5424)</h3>
+            <div class="modal-text">
+                <p>Un mensaje Syslog estándar se compone de tres partes principales:</p>
+                <ul>
+                    <li><strong>Encabezado (Header):</strong> Contiene el PRI, la marca de tiempo (Timestamp), el nombre del host y el nombre de la aplicación (TAG).</li>
+                    <li><strong>Datos Estructurados (SD):</strong> Metadatos opcionales en formato clave=valor (no mostrados en esta simulación básica).</li>
+                    <li><strong>Mensaje (MSG):</strong> El texto libre que describe el evento.</li>
+                </ul>
+                <p>El encabezado es fundamental para saber <em>cuándo</em>, <em>dónde</em> y <em>quién</em> generó el evento antes de leer el contenido.</p>
             </div>
         </div>
     </div>
 
 <script>
-    /* --- CONFIGURACIÓN Y ESTADO --- */
+    /* --- ESTADO --- */
     const canvas = document.getElementById('anim-canvas');
     const ctx = canvas.getContext('2d');
-    
     let remoteActive = false;
-    let protocol = 'udp'; // udp | tcp
+    let protocol = 'udp';
     let packets = [];
     const elements = {};
-    
-    // Configuración de Reglas (Simulando rsyslog.conf)
-    let activeRules = {
-        auth: true,
-        kern: true
-    };
+    let activeRules = { auth: true, kern: true };
 
-    /* --- INICIALIZACIÓN --- */
+    // Definiciones RFC
+    const FACILITY_NAMES = { 0: 'kern', 3: 'daemon', 4: 'auth' };
+    const SEVERITY_NAMES = { 3: 'err', 4: 'warn', 6: 'info' };
+
     function init() {
         resize();
         window.addEventListener('resize', resize);
-        updateRulesDisplay(); // Mostrar reglas iniciales
+        updateRulesDisplay();
         requestAnimationFrame(loop);
     }
 
@@ -481,129 +470,93 @@
         canvas.width = container.offsetWidth;
         canvas.height = container.offsetHeight;
         
-        // Mapear coordenadas de los nodos DOM
         const ids = ['input-ssh', 'input-kernel', 'input-app', 'daemon-rsyslog', 
                      'file-auth', 'file-kern', 'file-syslog', 'out-network'];
-        
         const containerRect = container.getBoundingClientRect();
-        
         ids.forEach(id => {
             const el = document.getElementById(id);
             const rect = el.getBoundingClientRect();
             elements[id] = {
                 x: rect.left - containerRect.left + rect.width/2,
                 y: rect.top - containerRect.top + rect.height/2,
-                w: rect.width,
-                h: rect.height,
-                id: id
+                w: rect.width, h: rect.height, id: id
             };
         });
     }
 
-    /* --- LÓGICA DE PAQUETES --- */
+    /* --- LOGICA PAQUETES --- */
     class LogPacket {
-        constructor(facility, severity) {
-            this.facility = facility; // auth, kern, daemon
-            this.severity = severity; // err, warn, info
+        constructor(facName, facVal, sevName, sevVal) {
+            this.facName = facName; 
+            this.facVal = facVal;
+            this.sevName = sevName;
+            this.sevVal = sevVal;
+            
             this.progress = 0;
-            this.stage = 0; // 0: Input->Daemon, 1: Daemon->Files/Net
+            this.stage = 0; 
             this.dead = false;
             this.id = Math.floor(Math.random()*1000);
-
-            // Estilo visual
-            this.color = severity === 'err' ? '#f38ba8' : (severity === 'warn' ? '#f9e2af' : '#a6e3a1');
-            this.size = 6;
             
-            // Ruta inicial
+            this.color = sevName === 'err' ? '#f38ba8' : (sevName === 'warn' ? '#f9e2af' : '#a6e3a1');
+            this.size = 6;
             this.setPath(0);
         }
 
         setPath(stage) {
             this.stage = stage;
             this.progress = 0;
-
             if (stage === 0) {
-                // Etapa 1: Origen -> Rsyslog
                 let startId = 'input-app';
-                if (this.facility === 'auth') startId = 'input-ssh';
-                if (this.facility === 'kern') startId = 'input-kernel';
-                
+                if (this.facName === 'auth') startId = 'input-ssh';
+                if (this.facName === 'kern') startId = 'input-kernel';
                 this.start = elements[startId];
                 this.end = elements['daemon-rsyslog'];
                 this.speed = 0.02;
-
                 pulseDOM(startId);
             } 
             else if (stage === 1) {
-                // Etapa 2: Rsyslog -> Archivo (CON LÓGICA DE REGLAS)
                 this.start = elements['daemon-rsyslog'];
                 this.speed = 0.015;
-
-                // Lógica dinámica basada en el modal
-                if (this.facility === 'auth') {
-                    // Si la regla Auth está activa -> auth.log, sino -> syslog
-                    this.end = activeRules.auth ? elements['file-auth'] : elements['file-syslog'];
-                }
-                else if (this.facility === 'kern') {
-                    // Si la regla Kern está activa -> kern.log, sino -> syslog
-                    this.end = activeRules.kern ? elements['file-kern'] : elements['file-syslog'];
-                }
-                else {
-                    // Resto (daemon, user, etc) -> syslog
-                    this.end = elements['file-syslog'];
-                }
+                if (this.facName === 'auth') this.end = activeRules.auth ? elements['file-auth'] : elements['file-syslog'];
+                else if (this.facName === 'kern') this.end = activeRules.kern ? elements['file-kern'] : elements['file-syslog'];
+                else this.end = elements['file-syslog'];
             }
             else if (stage === 2) {
-                // Etapa 3 (Opcional): Copia a Red
                 this.start = elements['daemon-rsyslog'];
                 this.end = elements['out-network'];
-                
-                // TCP es más lento (simulado)
                 this.speed = protocol === 'tcp' ? 0.01 : 0.025; 
             }
         }
 
         update() {
             this.progress += this.speed;
-
-            // Simulación de pérdida de paquetes UDP
             if (this.stage === 2 && protocol === 'udp' && !this.dead) {
-                // 15% de probabilidad de pérdida a mitad de camino
                 if (this.progress > 0.4 && this.progress < 0.5 && Math.random() < 0.05) {
                     this.dead = true;
-                    logMsg(`⚠️ Paquete UDP #${this.id} perdido en la red!`, 'err');
+                    logMsg(`⚠️ Paquete UDP #${this.id} perdido!`, 'err');
                     return;
                 }
             }
-
             if (this.progress >= 1) {
                 if (this.stage === 0) {
-                    // Llegó al demonio
                     pulseDOM('daemon-rsyslog');
-                    
-                    // Al llegar al demonio, se bifurca
-                    // 1. Siempre va al disco local (pasamos a stage 1)
                     this.setPath(1);
-
-                    // 2. Si red está activa, creamos un CLON para ir a la red
                     if (remoteActive) {
-                        const netPacket = new LogPacket(this.facility, this.severity);
-                        netPacket.id = this.id; // Mismo ID para identificarlo
-                        netPacket.setPath(2); // Ruta de red direct
+                        const netPacket = new LogPacket(this.facName, this.facVal, this.sevName, this.sevVal);
+                        netPacket.id = this.id; 
+                        netPacket.setPath(2);
                         packets.push(netPacket);
                     }
                 } 
                 else if (this.stage === 1) {
-                    // Llegó al archivo
                     pulseDOM(this.end.id);
-                    const fileName = this.end.id.replace('file-', '') + '.log';
-                    logMsg(`💾 Guardado en ${fileName}`, 'info');
+                    const f = this.end.id.replace('file-', '') + '.log';
+                    logMsg(`💾 Guardado en ${f}`, 'info');
                     this.dead = true;
                 }
                 else if (this.stage === 2) {
-                    // Llegó a la red
                     pulseDOM('out-network');
-                    logMsg(`🌐 Recibido en Server Remoto (vía ${protocol.toUpperCase()})`, 'ok');
+                    logMsg(`🌐 Enviado Remoto (${protocol.toUpperCase()})`, 'ok');
                     this.dead = true;
                 }
             }
@@ -611,39 +564,56 @@
 
         draw() {
             if (this.dead) return;
-            
             const dx = this.end.x - this.start.x;
             const dy = this.end.y - this.start.y;
             const x = this.start.x + dx * this.progress;
             const y = this.start.y + dy * this.progress;
-
             ctx.fillStyle = this.color;
-            ctx.shadowBlur = 10;
-            ctx.shadowColor = this.color;
-            ctx.beginPath();
-            ctx.arc(x, y, this.size, 0, Math.PI * 2);
-            ctx.fill();
+            ctx.shadowBlur = 10; ctx.shadowColor = this.color;
+            ctx.beginPath(); ctx.arc(x, y, this.size, 0, Math.PI * 2); ctx.fill();
             ctx.shadowBlur = 0;
-
             if (this.stage === 2) {
-                ctx.fillStyle = "#fff";
-                ctx.font = "10px Arial";
+                ctx.fillStyle = "#fff"; ctx.font = "10px Arial";
                 ctx.fillText(protocol === 'udp' ? 'U' : 'T', x + 8, y - 5);
             }
         }
     }
 
     /* --- FUNCIONES DE CONTROL --- */
-    function spawnLog(facility, severity) {
-        const p = new LogPacket(facility, severity);
+    function spawnLog(facName, facVal, sevName, sevVal) {
+        const p = new LogPacket(facName, facVal, sevName, sevVal);
         packets.push(p);
         
-        let msg = "";
-        if(facility === 'auth') msg = "Intento fallido de contraseña para root";
-        if(facility === 'kern') msg = "I/O Error: dev sda1 sector 34234";
-        if(facility === 'daemon') msg = "CRON[102]: (root) CMD (backup.sh)";
+        let msgBody = "";
+        let appName = "";
+        if(facName === 'auth') { msgBody = "Failed password for root from 192.168.1.50"; appName = "sshd[1290]"; }
+        if(facName === 'kern') { msgBody = "I/O Error: dev sda1 sector 34234"; appName = "kernel"; }
+        if(facName === 'daemon') { msgBody = "Backup job started"; appName = "CRON[888]"; }
+
+        // Actualizar Inspector
+        updateInspector(facVal, sevVal, appName, msgBody);
         
-        logMsg(`Nuevo evento [${facility}.${severity}]: ${msg}`, 'sys');
+        logMsg(`Evento [${facName}.${sevName}]: ${msgBody}`, 'sys');
+    }
+
+    function updateInspector(facVal, sevVal, appName, msgBody) {
+        const pri = (facVal * 8) + sevVal;
+        
+        // Actualizar cálculo
+        const calcBox = document.getElementById('insp-calc');
+        calcBox.innerHTML = `(<b style="color:var(--sev-info)">${facVal}</b> * 8) + <b style="color:var(--sev-warn)">${sevVal}</b> = <b style="color:var(--insp-pri)">${pri}</b>`;
+
+        // Generar Timestamp
+        const now = new Date();
+        const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+        const ts = `${months[now.getMonth()]} ${now.getDate()} ${now.toTimeString().split(' ')[0]}`;
+        const hostname = "ubuntu-server";
+
+        // Actualizar RAW
+        const rawBox = document.getElementById('insp-raw');
+        rawBox.innerHTML = `
+            <span class="tag-pri">&lt;${pri}&gt;</span><span class="tag-header">${ts} ${hostname} ${appName}:</span> <span class="tag-msg">${msgBody}</span>
+        `;
     }
 
     function toggleRemote() {
@@ -653,19 +623,11 @@
         const selector = document.getElementById('proto-selector');
 
         if (remoteActive) {
-            btn.style.background = "#a6e3a1";
-            btn.style.color = "#181825";
-            btn.innerText = "Envío Remoto ACTIVADO";
-            netNode.style.opacity = "1";
-            selector.style.opacity = "1";
-            selector.style.pointerEvents = "auto";
+            btn.style.background = "#a6e3a1"; btn.style.color = "#181825"; btn.innerText = "Envío Remoto ACTIVADO";
+            netNode.style.opacity = "1"; selector.style.opacity = "1"; selector.style.pointerEvents = "auto";
         } else {
-            btn.style.background = "#45475a";
-            btn.style.color = "white";
-            btn.innerText = "Activar Envío Remoto";
-            netNode.style.opacity = "0.5";
-            selector.style.opacity = "0.3";
-            selector.style.pointerEvents = "none";
+            btn.style.background = "#45475a"; btn.style.color = "white"; btn.innerText = "Activar Envío Remoto";
+            netNode.style.opacity = "0.5"; selector.style.opacity = "0.3"; selector.style.pointerEvents = "none";
         }
     }
 
@@ -673,124 +635,90 @@
         protocol = p;
         document.getElementById('opt-udp').className = `proto-opt ${p==='udp'?'active':''}`;
         document.getElementById('opt-tcp').className = `proto-opt ${p==='tcp'?'active':''}`;
-        logMsg(`Protocolo cambiado a ${p.toUpperCase()}. ${p==='tcp'?'Conexión fiable.':'Sin garantía de entrega.'}`, 'sys');
+        logMsg(`Protocolo cambiado a ${p.toUpperCase()}`, 'sys');
     }
 
-    /* --- GESTIÓN DEL MODAL Y REGLAS --- */
-    function openConfigModal() {
-        document.getElementById('configModal').style.display = 'block';
+    // Gestión de Modales
+    function openConfigModal() { openModal('configModal'); }
+    function closeConfigModal() { closeModal('configModal'); }
+
+    function openModal(id) {
+        if(id === 'pri') id = 'modalPri';
+        if(id === 'msg') id = 'modalMsg';
+        document.getElementById(id).style.display = 'block';
     }
 
-    function closeConfigModal() {
-        document.getElementById('configModal').style.display = 'none';
+    function closeModal(id) {
+        document.getElementById(id).style.display = 'none';
     }
 
     function updateRules() {
         activeRules.auth = document.getElementById('chk-auth').checked;
         activeRules.kern = document.getElementById('chk-kern').checked;
-        
-        // Actualizar visualmente el modal
         document.getElementById('row-auth').className = activeRules.auth ? 'rule-row active' : 'rule-row inactive';
         document.getElementById('row-kern').className = activeRules.kern ? 'rule-row active' : 'rule-row inactive';
-
         updateRulesDisplay();
-        logMsg("Configuración de rsyslog recargada.", "sys");
+        logMsg("Configuración recargada.", "sys");
     }
-
     function updateRulesDisplay() {
         const display = document.getElementById('rules-display');
         let html = "Reglas activas:<br>";
-        
         if (activeRules.auth) html += "auth.* &rarr; auth.log<br>";
         if (activeRules.kern) html += "kern.* &rarr; kern.log<br>";
-        html += "*.* &rarr; syslog"; // Regla base
-
+        html += "*.* &rarr; syslog";
         display.innerHTML = html;
     }
-
-    // Cerrar modal al hacer clic fuera
-    window.onclick = function(event) {
-        const modal = document.getElementById('configModal');
-        if (event.target == modal) {
-            closeConfigModal();
+    
+    // Cerrar cualquier modal al hacer clic fuera
+    window.onclick = function(e) {
+        if(e.target.classList.contains('modal')) {
+            e.target.style.display = 'none';
         }
     }
 
-    /* --- UTILIDADES VISUALES --- */
+    // Utilidades
     function pulseDOM(id) {
         const el = document.getElementById(id);
-        el.classList.remove('pulse');
-        void el.offsetWidth; 
-        el.classList.add('pulse');
+        el.classList.remove('pulse'); void el.offsetWidth; el.classList.add('pulse');
     }
-
     function logMsg(text, type) {
         const con = document.getElementById('console');
         const line = document.createElement('div');
         line.className = 'log-line';
-        
         let color = '#a6adc8';
         if(type === 'err') color = '#f38ba8';
         if(type === 'ok') color = '#a6e3a1';
         if(type === 'sys') color = '#89b4fa';
-        
         line.style.color = color;
         line.innerText = `> ${text}`;
-        
         con.prepend(line);
         if(con.children.length > 8) con.lastElementChild.remove();
     }
 
-    /* --- BUCLE PRINCIPAL --- */
+    // Loop
     function loop() {
         ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-        // Dibujar Conexiones (Fondo estático)
         if (elements['daemon-rsyslog']) {
-            ctx.lineWidth = 2;
-            ctx.strokeStyle = '#313244';
-            ctx.beginPath();
-            
+            ctx.lineWidth = 2; ctx.strokeStyle = '#313244'; ctx.beginPath();
             const center = elements['daemon-rsyslog'];
-
-            // Entradas
             ['input-ssh', 'input-kernel', 'input-app'].forEach(id => {
-                const el = elements[id];
-                ctx.moveTo(el.x, el.y);
-                ctx.lineTo(center.x, center.y);
+                const el = elements[id]; ctx.moveTo(el.x, el.y); ctx.lineTo(center.x, center.y);
             });
-
-            // Salidas Locales
             ['file-auth', 'file-kern', 'file-syslog'].forEach(id => {
-                const el = elements[id];
-                ctx.moveTo(center.x, center.y);
-                ctx.lineTo(el.x, el.y);
+                const el = elements[id]; ctx.moveTo(center.x, center.y); ctx.lineTo(el.x, el.y);
             });
-
-            // Salida Remota
             if(remoteActive) {
-                const el = elements['out-network'];
-                ctx.moveTo(center.x, center.y);
-                ctx.lineTo(el.x, el.y);
+                const el = elements['out-network']; ctx.moveTo(center.x, center.y); ctx.lineTo(el.x, el.y);
             }
-
             ctx.stroke();
         }
-
-        // Actualizar y dibujar paquetes
         for (let i = packets.length - 1; i >= 0; i--) {
-            let p = packets[i];
-            p.update();
-            p.draw();
+            let p = packets[i]; p.update(); p.draw();
             if (p.dead) packets.splice(i, 1);
         }
-
         requestAnimationFrame(loop);
     }
-
-    // Iniciar al cargar
     setTimeout(init, 100);
-
 </script>
 </body>
 </html>
