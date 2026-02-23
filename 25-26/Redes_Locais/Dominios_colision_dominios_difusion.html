@@ -1,0 +1,488 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simulador: Dominios de Colisión y Difusión</title>
+    <!-- Tailwind CSS para el diseño y estructuración -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome para los iconos de los dispositivos -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        /* Estilos personalizados para la animación de la red */
+        #network-container {
+            position: relative;
+            background-color: #0f172a; /* Slate 900 */
+            border-radius: 0.75rem;
+            overflow: hidden;
+            box-shadow: inset 0 2px 4px 0 rgb(0 0 0 / 0.05);
+        }
+        
+        .device-icon {
+            position: absolute;
+            transform: translate(-50%, -50%);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            z-index: 20;
+            text-shadow: 0 2px 4px rgba(0,0,0,0.5);
+            cursor: default;
+        }
+
+        /* Nuevo estilo para simular cajas de hardware */
+        .hardware-box {
+            background: linear-gradient(145deg, #1e293b, #0f172a);
+            border: 2px solid #334155;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255,255,255,0.1);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 3.5rem;
+            height: 3.5rem;
+            border-radius: 0.5rem;
+            transition: transform 0.2s, border-color 0.2s;
+        }
+
+        .device-icon:hover .hardware-box {
+            transform: scale(1.1);
+            border-color: #475569;
+        }
+        
+        .device-label {
+            font-size: 0.75rem;
+            margin-top: 0.5rem;
+            font-weight: 600;
+            background: rgba(0,0,0,0.7);
+            padding: 2px 8px;
+            border-radius: 999px;
+            border: 1px solid #334155;
+        }
+
+        .svg-lines {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 10;
+        }
+
+        .line {
+            stroke: #475569; /* Slate 600 */
+            stroke-width: 3;
+            stroke-linecap: round;
+            transition: stroke 0.3s;
+        }
+
+        .highlight-area {
+            position: absolute;
+            border-radius: 1rem;
+            transform: translate(-50%, -50%);
+            z-index: 5;
+            opacity: 0;
+            transition: opacity 0.5s ease;
+        }
+    </style>
+</head>
+<body class="bg-gray-50 text-gray-800 font-sans min-h-screen p-4 md:p-8">
+
+    <div class="max-w-6xl mx-auto">
+        <!-- Encabezado -->
+        <header class="mb-6 text-center">
+            <h1 class="text-3xl font-bold text-slate-800 mb-2"><i class="fa-solid fa-network-wired text-blue-600"></i> Dominios de Colisión y Difusión</h1>
+            <p class="text-slate-600 max-w-2xl mx-auto">Esta simulación demuestra cómo interactúan los paquetes de datos. Observa cómo los Switches dividen los dominios de colisión aislando el tráfico, y cómo los Routers frenan las tormentas de difusión.</p>
+        </header>
+
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            
+            <!-- Panel de Control y Explicaciones -->
+            <div class="lg:col-span-1 bg-white rounded-xl shadow-md p-6 border border-gray-100 flex flex-col gap-4">
+                <h2 class="text-xl font-bold text-slate-800 border-b pb-2">Controles de Simulación</h2>
+                
+                <!-- Botón 1: Colisión en Hub -->
+                <button id="btn-colision" class="sim-btn flex flex-col items-start bg-red-50 hover:bg-red-100 text-red-700 p-3 rounded-lg border border-red-200 transition text-left" onclick="playCollision()">
+                    <span class="font-bold mb-1"><i class="fa-solid fa-burst"></i> 1. Colisión en Hub (Capa 1)</span>
+                    <span class="text-xs text-red-600">PC3 y PC4 transmiten a la vez. El Hub no tiene inteligencia para gestionar el tráfico y los paquetes colisionan.</span>
+                </button>
+
+                <!-- Botón 2: Switch sin colisión -->
+                <button id="btn-switch" class="sim-btn flex flex-col items-start bg-emerald-50 hover:bg-emerald-100 text-emerald-700 p-3 rounded-lg border border-emerald-200 transition text-left" onclick="playSwitch()">
+                    <span class="font-bold mb-1"><i class="fa-solid fa-check-circle"></i> 2. Microsegmentación (Switch)</span>
+                    <span class="text-xs text-emerald-600">PC1 y PC5 transmiten a la vez. El Switch (Capa 2) encola los datos en memoria y reenvía sin que colisionen.</span>
+                </button>
+
+                <!-- Botón 3: Dominio de Difusión -->
+                <button id="btn-broadcast" class="sim-btn flex flex-col items-start bg-blue-50 hover:bg-blue-100 text-blue-700 p-3 rounded-lg border border-blue-200 transition text-left" onclick="playBroadcast()">
+                    <span class="font-bold mb-1"><i class="fa-solid fa-satellite-dish"></i> 3. Broadcast (Difusión)</span>
+                    <span class="text-xs text-blue-600">PC1 envía un mensaje de difusión a toda la red. El Router (Capa 3) lo bloquea para no saturar otras subredes.</span>
+                </button>
+
+                <!-- Control de Velocidad -->
+                <div class="mt-2 pt-4 border-t border-gray-200">
+                    <label for="speed-control" class="block text-sm font-bold text-slate-700 mb-2 flex justify-between">
+                        <span><i class="fa-solid fa-gauge-high mr-1"></i> Velocidad de Animación</span>
+                        <span id="speed-val" class="text-blue-600">1.0x</span>
+                    </label>
+                    <input type="range" id="speed-control" min="0.25" max="3" step="0.25" value="1" class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600">
+                    <div class="flex justify-between text-xs text-gray-400 mt-1 font-semibold">
+                        <span>Lenta</span>
+                        <span>Normal</span>
+                        <span>Rápida</span>
+                    </div>
+                </div>
+
+                <!-- Panel de información dinámica -->
+                <div class="mt-auto pt-4 border-t">
+                    <h3 class="font-bold text-sm text-slate-500 uppercase mb-2">Estado de la Red</h3>
+                    <div id="status-panel" class="bg-slate-100 p-3 rounded-md text-sm text-slate-700 min-h-[90px] flex items-center">
+                        Esperando iniciar simulación... Selecciona un escenario en los botones superiores.
+                    </div>
+                </div>
+            </div>
+
+            <!-- Área de Visualización (Lienzo) -->
+            <div class="lg:col-span-2 flex flex-col">
+                <div id="network-container" class="w-full aspect-video shadow-lg">
+                    <!-- Las líneas SVG se dibujarán aquí -->
+                    <svg class="svg-lines" id="svg-layer"></svg>
+                    
+                    <!-- Dominios Visuales -->
+                    <div id="domain-left" class="highlight-area bg-blue-500/10 border-2 border-blue-500/30 dashed" style="width: 45%; height: 85%; left: 25%; top: 55%;"></div>
+                    <div id="domain-right" class="highlight-area bg-red-500/10 border-2 border-red-500/30 dashed" style="width: 45%; height: 85%; left: 75%; top: 55%;"></div>
+                </div>
+                
+                <div class="flex justify-between text-sm font-semibold text-slate-500 mt-3 px-8">
+                    <span><i class="fa-solid fa-cloud text-blue-400"></i> Subred A (Dominio de Difusión 1)</span>
+                    <span><i class="fa-solid fa-cloud text-red-400"></i> Subred B (Dominio de Difusión 2)</span>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- NUEVA SECCIÓN: Definiciones -->
+        <div class="mt-8 bg-white rounded-xl shadow-md p-6 border border-gray-100">
+            <h2 class="text-2xl font-bold text-slate-800 border-b pb-3 mb-5"><i class="fa-solid fa-book-open text-indigo-600"></i> Conceptos Clave</h2>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <!-- Tarjeta Dominio de Colisión -->
+                <div class="bg-red-50 p-5 rounded-xl border border-red-200 shadow-sm relative overflow-hidden">
+                    <div class="absolute top-0 right-0 p-4 opacity-10 text-red-900 text-6xl">
+                        <i class="fa-solid fa-burst"></i>
+                    </div>
+                    <h3 class="font-bold text-red-800 text-lg mb-2 relative z-10"><i class="fa-solid fa-burst mr-2"></i> Dominio de Colisión</h3>
+                    <p class="text-sm text-slate-700 mb-3 relative z-10">
+                        Es un segmento físico de la red donde los datos transmitidos pueden colisionar entre sí si dos dispositivos intentan enviar información exactamente al mismo tiempo en un medio compartido.
+                    </p>
+                    <ul class="list-disc list-inside text-sm text-slate-700 space-y-1 relative z-10">
+                        <li><strong class="text-red-900">Hubs (Concentradores):</strong> Forman <strong>un único dominio de colisión</strong>. Si cualquier equipo conectado al hub transmite, todos los demás deben escuchar y esperar.</li>
+                        <li><strong class="text-red-900">Switches (Conmutadores):</strong> <strong>Dividen</strong> los dominios de colisión. Cada puerto de un switch crea su propio dominio independiente (microsegmentación), eliminando prácticamente las colisiones.</li>
+                    </ul>
+                </div>
+
+                <!-- Tarjeta Dominio de Difusión -->
+                <div class="bg-blue-50 p-5 rounded-xl border border-blue-200 shadow-sm relative overflow-hidden">
+                    <div class="absolute top-0 right-0 p-4 opacity-10 text-blue-900 text-6xl">
+                        <i class="fa-solid fa-satellite-dish"></i>
+                    </div>
+                    <h3 class="font-bold text-blue-800 text-lg mb-2 relative z-10"><i class="fa-solid fa-satellite-dish mr-2"></i> Dominio de Difusión (Broadcast)</h3>
+                    <p class="text-sm text-slate-700 mb-3 relative z-10">
+                        Es un área lógica de la red conformada por todos los dispositivos que pueden ser alcanzados mediante un mensaje de difusión en la capa de enlace (dirección MAC <code>FF:FF:FF:FF:FF:FF</code>).
+                    </p>
+                    <ul class="list-disc list-inside text-sm text-slate-700 space-y-1 relative z-10">
+                        <li><strong class="text-blue-900">Switches y Hubs:</strong> Pertencen a un único dominio de difusión. Si reciben un broadcast, lo reenvían por todos sus puertos, inundando la red local (flooding).</li>
+                        <li><strong class="text-blue-900">Routers (Enrutadores):</strong> <strong>Dividen</strong> los dominios de difusión. Un router detiene los paquetes de broadcast y no los deja pasar hacia otras redes, controlando el tráfico indeseado.</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+        
+    </div>
+
+    <script>
+        // --- EVENTOS DEL SLIDER ---
+        const speedSlider = document.getElementById('speed-control');
+        const speedValLabel = document.getElementById('speed-val');
+        
+        speedSlider.addEventListener('input', function() {
+            speedValLabel.innerText = this.value + 'x';
+        });
+
+        // Obtener el multiplicador actual
+        function getSpeed() {
+            return parseFloat(speedSlider.value) || 1;
+        }
+
+        // Función sleep que respeta la velocidad actual
+        const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms / getSpeed()));
+
+        // --- CONFIGURACIÓN DE LA TOPOLOGÍA ---
+        const nodes = {
+            router: { id: 'router', type: 'router', icon: 'fa-server', x: 50, y: 15, label: 'Router' },
+            switch1: { id: 'switch1', type: 'switch', icon: 'fa-network-wired', x: 25, y: 45, label: 'Switch' },
+            hub1: { id: 'hub1', type: 'hub', icon: 'fa-circle-nodes', x: 75, y: 45, label: 'Hub' },
+            // Subred A (Switch)
+            pc1: { id: 'pc1', type: 'pc', icon: 'fa-desktop', x: 8, y: 80, label: 'PC 1' },
+            pc2: { id: 'pc2', type: 'pc', icon: 'fa-desktop', x: 25, y: 80, label: 'PC 2' },
+            pc5: { id: 'pc5', type: 'pc', icon: 'fa-desktop', x: 42, y: 80, label: 'PC 5' },
+            // Subred B (Hub)
+            pc3: { id: 'pc3', type: 'pc', icon: 'fa-desktop', x: 58, y: 80, label: 'PC 3' },
+            pc4: { id: 'pc4', type: 'pc', icon: 'fa-desktop', x: 75, y: 80, label: 'PC 4' },
+            pc6: { id: 'pc6', type: 'pc', icon: 'fa-desktop', x: 92, y: 80, label: 'PC 6' }
+        };
+
+        const links = [
+            { from: 'router', to: 'switch1' },
+            { from: 'router', to: 'hub1' },
+            { from: 'switch1', to: 'pc1' },
+            { from: 'switch1', to: 'pc2' },
+            { from: 'switch1', to: 'pc5' }, 
+            { from: 'hub1', to: 'pc3' },
+            { from: 'hub1', to: 'pc4' },
+            { from: 'hub1', to: 'pc6' }  
+        ];
+
+        const container = document.getElementById('network-container');
+        const svgLayer = document.getElementById('svg-layer');
+        const statusPanel = document.getElementById('status-panel');
+        let isAnimating = false;
+
+        // --- RENDERIZADO INICIAL ---
+        function initNetwork() {
+            // Dibujar líneas
+            links.forEach(link => {
+                const n1 = nodes[link.from];
+                const n2 = nodes[link.to];
+                const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+                line.setAttribute('x1', `${n1.x}%`);
+                line.setAttribute('y1', `${n1.y}%`);
+                line.setAttribute('x2', `${n2.x}%`);
+                line.setAttribute('y2', `${n2.y}%`);
+                line.setAttribute('class', 'line');
+                svgLayer.appendChild(line);
+            });
+
+            // Dibujar Nodos con nuevo diseño de hardware
+            Object.values(nodes).forEach(node => {
+                const el = document.createElement('div');
+                el.className = 'device-icon';
+                el.style.left = `${node.x}%`;
+                el.style.top = `${node.y}%`;
+                
+                // Color dependiendo del tipo
+                let colorClass = 'text-white';
+                if(node.type === 'router') colorClass = 'text-blue-400 text-3xl';
+                if(node.type === 'switch') colorClass = 'text-emerald-400 text-2xl';
+                if(node.type === 'hub') colorClass = 'text-red-400 text-2xl';
+                if(node.type === 'pc') colorClass = 'text-gray-300 text-xl';
+
+                el.innerHTML = `
+                    <div class="hardware-box">
+                        <i class="fa-solid ${node.icon} ${colorClass}"></i>
+                    </div>
+                    <span class="device-label">${node.label}</span>
+                `;
+                container.appendChild(el);
+            });
+        }
+
+        // --- SISTEMA DE ANIMACIÓN DE PAQUETES ---
+        function createPacket(colorClass) {
+            const pkt = document.createElement('div');
+            pkt.className = `absolute w-4 h-4 rounded-full z-30 shadow-md ${colorClass}`;
+            pkt.style.transform = 'translate(-50%, -50%)'; // Centrar
+            return pkt;
+        }
+
+        function animatePacket(packet, fromNode, toNode, baseDuration = 1000) {
+            return new Promise(resolve => {
+                container.appendChild(packet);
+                
+                const startX = `${fromNode.x}%`;
+                const startY = `${fromNode.y}%`;
+                const endX = `${toNode.x}%`;
+                const endY = `${toNode.y}%`;
+
+                packet.style.left = startX;
+                packet.style.top = startY;
+
+                // Aplicar la velocidad de simulación a la duración
+                const actualDuration = baseDuration / getSpeed();
+
+                const animation = packet.animate([
+                    { left: startX, top: startY },
+                    { left: endX, top: endY }
+                ], {
+                    duration: actualDuration,
+                    easing: 'linear',
+                    fill: 'forwards'
+                });
+
+                animation.onfinish = () => {
+                    resolve(packet);
+                };
+            });
+        }
+
+        function showEffect(node, text, colorClass) {
+            const effect = document.createElement('div');
+            effect.className = `absolute z-40 font-bold text-2xl drop-shadow-lg whitespace-nowrap ${colorClass}`;
+            effect.style.left = `${node.x}%`;
+            effect.style.top = `${node.y}%`;
+            effect.style.transform = 'translate(-50%, -50%)';
+            effect.innerHTML = text;
+            container.appendChild(effect);
+
+            // La animación del texto también depende de la velocidad
+            effect.animate([
+                { transform: 'translate(-50%, -50%) scale(0.5)', opacity: 1 },
+                { transform: 'translate(-50%, -50%) scale(2)', opacity: 0 }
+            ], { duration: 1500 / getSpeed(), easing: 'ease-out' }).onfinish = () => effect.remove();
+        }
+
+        // Bloquear botones durante animación
+        function setUIState(animating) {
+            isAnimating = animating;
+            document.querySelectorAll('.sim-btn').forEach(btn => {
+                btn.style.opacity = animating ? '0.5' : '1';
+                btn.style.pointerEvents = animating ? 'none' : 'auto';
+            });
+            speedSlider.disabled = animating; // Bloquear slider
+            
+            // Ocultar dominios al resetear
+            if(!animating) {
+                document.getElementById('domain-left').style.opacity = '0';
+                document.getElementById('domain-right').style.opacity = '0';
+            }
+        }
+
+        function updateStatus(text, type = 'info') {
+            let color = 'text-slate-700';
+            if(type === 'error') color = 'text-red-600 font-bold';
+            if(type === 'success') color = 'text-emerald-600 font-bold';
+            statusPanel.innerHTML = `<span class="${color}">${text}</span>`;
+        }
+
+        // --- ESCENARIO 1: COLISIÓN EN HUB ---
+        async function playCollision() {
+            if(isAnimating) return;
+            setUIState(true);
+            updateStatus('PC3 y PC4 están a punto de enviar datos simultáneamente al Hub...', 'info');
+            document.getElementById('domain-right').style.opacity = '1';
+
+            await sleep(1000);
+
+            // Ambos envían al Hub
+            const pkt1 = createPacket('bg-orange-500');
+            const pkt2 = createPacket('bg-purple-500');
+
+            updateStatus('Paquetes viajando... El Hub es un único dominio de colisión y no puede gestionar tráfico simultáneo.', 'info');
+            
+            await Promise.all([
+                animatePacket(pkt1, nodes.pc3, nodes.hub1, 1500),
+                animatePacket(pkt2, nodes.pc4, nodes.hub1, 1500)
+            ]);
+
+            // Colisión en el Hub
+            pkt1.remove();
+            pkt2.remove();
+            showEffect(nodes.hub1, '💥 COLISIÓN', 'text-red-500');
+            
+            // Hub propaga el error a TODOS sus puertos conectados (incluyendo PC6)
+            const errPkt = createPacket('bg-red-500 shadow-[0_0_8px_red]');
+            animatePacket(errPkt, nodes.hub1, nodes.pc6, 1000).then(() => errPkt.remove());
+
+            updateStatus('¡COLISIÓN! El Hub (Capa 1) simplemente repite señales eléctricas. Toma la señal corrompida de la colisión y la reenvía a PC6.', 'error');
+
+            await sleep(4000);
+            setUIState(false);
+        }
+
+        // --- ESCENARIO 2: SWITCH SIN COLISIÓN ---
+        async function playSwitch() {
+            if(isAnimating) return;
+            setUIState(true);
+            updateStatus('PC1 y PC5 enviarán datos simultáneamente a distintos destinos a través del Switch...', 'info');
+            document.getElementById('domain-left').style.opacity = '1';
+
+            await sleep(1000);
+
+            const pkt1 = createPacket('bg-teal-400'); // De PC1 a PC2
+            const pkt2 = createPacket('bg-yellow-400'); // De PC5 a PC1
+
+            // Viaje hacia el Switch
+            await Promise.all([
+                animatePacket(pkt1, nodes.pc1, nodes.switch1, 1200),
+                animatePacket(pkt2, nodes.pc5, nodes.switch1, 1200)
+            ]);
+
+            showEffect(nodes.switch1, '⚙️ Procesando', 'text-emerald-300 text-sm');
+            updateStatus('El Switch recibe los paquetes. Al operar en Capa 2, lee las direcciones MAC, almacena en memoria (búfer) y conmuta sin colisionar.', 'success');
+
+            await sleep(800);
+
+            // Viaje a destinos
+            await Promise.all([
+                animatePacket(pkt1, nodes.switch1, nodes.pc2, 1200),
+                animatePacket(pkt2, nodes.switch1, nodes.pc1, 1200)
+            ]);
+
+            pkt1.remove();
+            pkt2.remove();
+            showEffect(nodes.pc1, '✅', 'text-emerald-500');
+            showEffect(nodes.pc2, '✅', 'text-emerald-500');
+            
+            await sleep(3000);
+            setUIState(false);
+        }
+
+        // --- ESCENARIO 3: DOMINIO DE DIFUSIÓN (BROADCAST) ---
+        async function playBroadcast() {
+            if(isAnimating) return;
+            setUIState(true);
+            document.getElementById('domain-left').style.opacity = '1';
+            updateStatus('PC1 envía una trama de Difusión (Broadcast, ej. buscando un servidor DHCP). El destino es la dirección MAC FF:FF:FF:FF:FF:FF.', 'info');
+
+            await sleep(1000);
+
+            // Paquete sale de PC1
+            const pkt1 = createPacket('bg-white shadow-[0_0_10px_white]');
+            await animatePacket(pkt1, nodes.pc1, nodes.switch1, 1000);
+            pkt1.remove();
+
+            updateStatus('El Switch inunda (flooding) la trama por todos sus puertos activos, multiplicando el tráfico en su subred.', 'info');
+            
+            // Switch duplica el paquete a PC2, PC5 y al Router
+            const pkt2 = createPacket('bg-white shadow-[0_0_10px_white]');
+            const pkt3 = createPacket('bg-white shadow-[0_0_10px_white]');
+            const pkt4 = createPacket('bg-white shadow-[0_0_10px_white]');
+            
+            await Promise.all([
+                animatePacket(pkt2, nodes.switch1, nodes.pc2, 1000),
+                animatePacket(pkt4, nodes.switch1, nodes.pc5, 1000),
+                animatePacket(pkt3, nodes.switch1, nodes.router, 1000)
+            ]);
+
+            pkt2.remove();
+            pkt4.remove();
+            pkt3.remove();
+
+            showEffect(nodes.pc2, 'Recibido', 'text-white text-xs bg-blue-600 rounded px-1');
+            showEffect(nodes.pc5, 'Recibido', 'text-white text-xs bg-blue-600 rounded px-1');
+            showEffect(nodes.router, '🛑 Bloqueado', 'text-red-400');
+            
+            // Muestra que el otro lado está a salvo
+            document.getElementById('domain-right').style.opacity = '0.2'; 
+
+            updateStatus('El Router detiene el Broadcast. Los routers separan redes lógicas y protegen a la Subred B (PC3, PC4, PC6) de recibir tráfico basura innecesario.', 'success');
+
+            await sleep(5000);
+            setUIState(false);
+        }
+
+        // Inicializar al cargar
+        window.onload = initNetwork;
+    </script>
+</body>
+</html>
