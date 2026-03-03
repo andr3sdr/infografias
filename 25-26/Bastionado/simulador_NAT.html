@@ -1,0 +1,441 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Animación Interactiva NAT/PAT</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #f3f4f6; color: #1f2937; margin: 0; padding: 0; display: flex; flex-direction: column; min-height: 100vh;}
+        .mono { font-family: 'JetBrains Mono', monospace; }
+        
+        /* Animación y diseño del Paquete IP */
+        #packet {
+            position: absolute;
+            top: 0;
+            left: 0;
+            opacity: 0;
+            pointer-events: none;
+            z-index: 50;
+            will-change: transform;
+        }
+        .packet-animate {
+            transition: transform 1.5s ease-in-out, opacity 0.3s;
+        }
+        
+        /* Tabla NAT animación */
+        .new-row {
+            animation: highlightRow 2s ease-out;
+        }
+        @keyframes highlightRow {
+            0% { background-color: #fef08a; } /* Amarillo brillante */
+            100% { background-color: transparent; }
+        }
+
+        /* Responsive diagram area */
+        .diagram-container {
+            min-width: 800px; /* Previene que los nodos se apelotonen en móviles */
+        }
+    </style>
+</head>
+<body class="p-4 md:p-8">
+
+    <div class="max-w-6xl mx-auto bg-white rounded-2xl shadow-xl overflow-hidden flex flex-col h-full">
+        
+        <!-- Header -->
+        <header class="bg-blue-900 text-white p-6">
+            <h1 class="text-2xl font-bold flex items-center gap-3">
+                <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="8" x="2" y="14" rx="2"/><path d="M6 18h.01"/><path d="M10 18h.01"/><path d="M16 18h.01"/><path d="M12 14v-4"/><path d="M8 8h8"/><path d="M12 8V4"/></svg>
+                Traducción de Direcciones de Red y Puerto (NAT/PAT)
+            </h1>
+            <p class="text-blue-200 mt-2 text-sm md:text-base">Avanza paso a paso para ver cómo el Router traduce las direcciones IP y puertos privados a públicos para conectar múltiples equipos a Internet usando una única IP pública.</p>
+        </header>
+
+        <!-- Main Content -->
+        <div class="flex-1 flex flex-col lg:flex-row border-b border-gray-200">
+            
+            <!-- Panel Izquierdo: Explicación y Tabla -->
+            <div class="w-full lg:w-2/5 p-6 bg-gray-50 flex flex-col gap-6 border-r border-gray-200">
+                
+                <!-- Caja de Explicación del Paso Actual -->
+                <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-5">
+                    <div class="flex justify-between items-center mb-3">
+                        <span id="stepCounter" class="bg-blue-100 text-blue-800 text-xs font-bold px-2.5 py-1 rounded-full uppercase tracking-wide">Paso 0 de 8</span>
+                    </div>
+                    <h2 id="stepTitle" class="text-lg font-bold text-gray-900 mb-2">Estado Inicial</h2>
+                    <p id="stepDesc" class="text-gray-600 text-sm leading-relaxed">Haz clic en "Siguiente Paso" para comenzar la animación.</p>
+                </div>
+
+                <!-- Tabla NAT/PAT -->
+                <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden flex-1">
+                    <div class="bg-gray-800 text-white p-3 text-center text-sm font-semibold tracking-wide border-b border-gray-700">
+                        TABLA NAT / PAT DEL ROUTER
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-xs text-left text-gray-700">
+                            <thead class="text-xs text-gray-500 bg-gray-100 uppercase mono border-b border-gray-200">
+                                <tr>
+                                    <th scope="col" class="px-3 py-2">Privada (Local)</th>
+                                    <th scope="col" class="px-3 py-2 border-x border-gray-200">Pública (Router)</th>
+                                    <th scope="col" class="px-3 py-2">Destino (Internet)</th>
+                                </tr>
+                            </thead>
+                            <tbody id="natTableBody" class="mono divide-y divide-gray-100">
+                                <!-- Filas dinámicas -->
+                            </tbody>
+                        </table>
+                        <div id="emptyTableMsg" class="text-center text-gray-400 py-6 text-sm italic">
+                            La tabla está vacía
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Panel Derecho: Diagrama de Red (Área interactiva) -->
+            <div class="w-full lg:w-3/5 p-6 bg-white overflow-x-auto relative" id="diagramWrapper">
+                <div class="diagram-container relative h-[500px] flex justify-between items-center" id="diagramContainer">
+                    
+                    <!-- Red Privada -->
+                    <div class="flex flex-col justify-between h-full py-10 w-1/4 relative z-10">
+                        <div class="absolute inset-0 bg-blue-50/50 rounded-2xl border-2 border-dashed border-blue-200 -z-10"></div>
+                        <div class="text-center text-xs font-bold text-blue-800 uppercase absolute top-2 w-full">Red Privada (LAN)</div>
+                        
+                        <!-- Host 1 -->
+                        <div id="host1" class="flex flex-col items-center gap-2 p-2 bg-white rounded-lg shadow-sm">
+                            <svg class="w-12 h-12 text-gray-700" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="8" x="5" y="2" rx="2"/><rect width="20" height="8" x="2" y="14" rx="2"/><path d="M6 18h.01"/><path d="M10 18h.01"/><path d="M16 18h.01"/><path d="M12 14v-4"/></svg>
+                            <div class="text-center">
+                                <div class="font-bold text-sm">Host 1</div>
+                                <div class="mono text-xs text-blue-600 bg-blue-50 px-1 rounded mt-1">192.168.50.50</div>
+                            </div>
+                        </div>
+
+                        <!-- Host 2 -->
+                        <div id="host2" class="flex flex-col items-center gap-2 p-2 bg-white rounded-lg shadow-sm">
+                            <svg class="w-12 h-12 text-gray-700" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 16V7a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v9m16 0H4m16 0 1.28 2.55a1 1 0 0 1-.9 1.45H3.62a1 1 0 0 1-.9-1.45L4 16"/></svg>
+                            <div class="text-center">
+                                <div class="font-bold text-sm">Host 2</div>
+                                <div class="mono text-xs text-blue-600 bg-blue-50 px-1 rounded mt-1">192.168.50.6</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Router Frontal -->
+                    <div id="router" class="flex flex-col items-center z-10 p-4">
+                        <svg class="w-16 h-16 text-indigo-600" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="8" x="2" y="14" rx="2"/><path d="M6 18h.01"/><path d="M10 18h.01"/><path d="M16 18h.01"/><path d="M12 14v-4"/><path d="M8 8h8"/><path d="M12 8V4"/></svg>
+                        <div class="text-center mt-2">
+                            <div class="font-bold text-sm bg-indigo-100 text-indigo-800 px-2 py-1 rounded">Router NAT</div>
+                            <div class="mono text-xs text-gray-600 mt-1">IP Pública: <br><span class="font-bold text-indigo-600">220.16.16.5</span></div>
+                        </div>
+                    </div>
+
+                    <!-- Internet -->
+                    <div class="flex flex-col justify-between h-full py-10 w-1/4 relative z-10">
+                        <div class="absolute inset-0 bg-gray-100/80 rounded-2xl border-2 border-dashed border-gray-300 -z-10"></div>
+                        <div class="text-center text-xs font-bold text-gray-500 uppercase absolute top-2 w-full flex justify-center items-center gap-1">
+                            <svg class="w-4 h-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a10 10 0 1 0 0 20 10 10 0 1 0 0-20z"/><path d="M2 12h20"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+                            Internet
+                        </div>
+                        
+                        <!-- Web Server -->
+                        <div id="serverWeb" class="flex flex-col items-center gap-2 p-2 bg-white rounded-lg shadow-sm">
+                            <svg class="w-12 h-12 text-emerald-600" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="20" x="3" y="2" rx="2"/><path d="M3 6h18"/><path d="M3 10h18"/><path d="M7 14h.01"/><path d="M7 18h.01"/></svg>
+                            <div class="text-center">
+                                <div class="font-bold text-sm">Servidor Web</div>
+                                <div class="mono text-xs text-emerald-600 bg-emerald-50 px-1 rounded mt-1">98.10.10.5 : 80</div>
+                            </div>
+                        </div>
+
+                        <!-- FTP Server -->
+                        <div id="serverFtp" class="flex flex-col items-center gap-2 p-2 bg-white rounded-lg shadow-sm">
+                            <svg class="w-12 h-12 text-amber-600" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" x2="12" y1="3" y2="15"/></svg>
+                            <div class="text-center">
+                                <div class="font-bold text-sm">Servidor FTP</div>
+                                <div class="mono text-xs text-amber-600 bg-amber-50 px-1 rounded mt-1">99.12.18.6 : 21</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- LÍNEAS CONECTORAS (Visuales puras) -->
+                    <svg class="absolute inset-0 w-full h-full -z-20 pointer-events-none" style="z-index: 0;">
+                        <!-- Host1 to Router -->
+                        <line x1="20%" y1="20%" x2="50%" y2="50%" stroke="#cbd5e1" stroke-width="2"/>
+                        <!-- Host2 to Router -->
+                        <line x1="20%" y1="80%" x2="50%" y2="50%" stroke="#cbd5e1" stroke-width="2"/>
+                        <!-- Router to Web -->
+                        <line x1="50%" y1="50%" x2="80%" y2="20%" stroke="#cbd5e1" stroke-width="2"/>
+                        <!-- Router to FTP -->
+                        <line x1="50%" y1="50%" x2="80%" y2="80%" stroke="#cbd5e1" stroke-width="2"/>
+                    </svg>
+
+                </div>
+
+                <!-- EL PAQUETE IP (Animado por JS) -->
+                <div id="packet" class="bg-white shadow-lg border-2 rounded p-2 text-xs w-48 transition-all duration-[1500ms] ease-in-out">
+                    <div class="flex items-center gap-1 mb-1 pb-1 border-b border-gray-200">
+                        <svg class="w-3 h-3 text-gray-500" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 22h14a2 2 0 0 0 2-2V7l-5-5H6a2 2 0 0 0-2 2v4"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M3 15h6"/><path d="M6 12v6"/></svg>
+                        <span class="font-bold text-[10px] text-gray-600 uppercase tracking-wide">Paquete IP</span>
+                    </div>
+                    <div class="mono leading-tight space-y-1">
+                        <div class="flex items-start">
+                            <span class="text-blue-600 font-bold w-7">SRC:</span>
+                            <span id="pktSrc" class="text-gray-800 break-all"></span>
+                        </div>
+                        <div class="flex items-start">
+                            <span class="text-emerald-600 font-bold w-7">DST:</span>
+                            <span id="pktDst" class="text-gray-800 break-all"></span>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+
+        <!-- Controles Inferiores -->
+        <div class="bg-gray-100 p-4 border-t border-gray-200 flex justify-between items-center">
+            <button id="btnReset" class="text-sm font-medium text-gray-600 hover:text-gray-900 px-4 py-2 flex items-center gap-2 transition-colors">
+                <svg class="w-4 h-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
+                Reiniciar
+            </button>
+            <div class="flex gap-3">
+                <button id="btnPrev" disabled class="bg-white border border-gray-300 text-gray-700 hover:bg-gray-50 font-medium px-5 py-2.5 rounded-lg text-sm shadow-sm disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 transition-colors">
+                    <svg class="w-4 h-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m15 18-6-6 6-6"/></svg>
+                    Anterior
+                </button>
+                <button id="btnNext" class="bg-blue-600 hover:bg-blue-700 text-white font-medium px-6 py-2.5 rounded-lg text-sm shadow-sm flex items-center gap-2 transition-colors">
+                    Siguiente Paso
+                    <svg class="w-4 h-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m9 18 6-6-6-6"/></svg>
+                </button>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        // Datos de la simulación
+        const stepsData = [
+            {
+                title: "Estado Inicial",
+                desc: "La red local está conectada a Internet a través del Router. La tabla NAT/PAT está vacía ya que no hay conexiones activas en este momento.",
+                table: [],
+                packet: null
+            },
+            {
+                title: "Paso 1: Petición Web del Host 1",
+                desc: "El Host 1 (192.168.50.50) quiere acceder al Servidor Web. Genera un paquete IP desde su puerto efímero privado (12002) dirigido a la IP pública del servidor web en el puerto 80.",
+                table: [],
+                packet: { from: 'host1', to: 'router', src: '192.168.50.50:12002', dst: '98.10.10.5:80', color: 'border-blue-300' }
+            },
+            {
+                title: "Paso 2: Traducción NAT de Salida",
+                desc: "El Router recibe el paquete. Al no poder enrutar una IP privada a Internet, cambia la <b>IP Origen</b> por su IP Pública (220.16.16.5) y le asigna un puerto libre (3000). Guarda este registro en su tabla.",
+                table: [
+                    { priv: '192.168.50.50:12002', pub: '220.16.16.5:3000', dest: '98.10.10.5:80' }
+                ],
+                packet: { from: 'router', to: 'serverWeb', src: '220.16.16.5:3000', dst: '98.10.10.5:80', color: 'border-indigo-400' }
+            },
+            {
+                title: "Paso 3: Respuesta del Servidor Web",
+                desc: "El Servidor Web procesa la petición y envía el paquete de respuesta. Fíjate que el destino de este paquete es la IP pública del Router y el puerto específico (3000) que se le asignó antes.",
+                table: [
+                    { priv: '192.168.50.50:12002', pub: '220.16.16.5:3000', dest: '98.10.10.5:80' }
+                ],
+                packet: { from: 'serverWeb', to: 'router', src: '98.10.10.5:80', dst: '220.16.16.5:3000', color: 'border-emerald-400' }
+            },
+            {
+                title: "Paso 4: Traducción NAT de Entrada",
+                desc: "El Router recibe el paquete de respuesta de Internet. Consulta su tabla NAT buscando el puerto destino 3000. Descubre que pertenece a 192.168.50.50:12002, reescribe el destino y lo reenvía a la red local.",
+                table: [
+                    { priv: '192.168.50.50:12002', pub: '220.16.16.5:3000', dest: '98.10.10.5:80' }
+                ],
+                packet: { from: 'router', to: 'host1', src: '98.10.10.5:80', dst: '192.168.50.50:12002', color: 'border-blue-400' }
+            },
+            {
+                title: "Paso 5: Petición Web del Host 2",
+                desc: "Ahora, el Host 2 (192.168.50.6) también intenta conectarse al mismo Servidor Web. Utiliza un puerto origen distinto (22986).",
+                table: [
+                    { priv: '192.168.50.50:12002', pub: '220.16.16.5:3000', dest: '98.10.10.5:80' }
+                ],
+                packet: { from: 'host2', to: 'router', src: '192.168.50.6:22986', dst: '98.10.10.5:80', color: 'border-blue-300' }
+            },
+            {
+                title: "Paso 6: PAT asigna un nuevo puerto",
+                desc: "El Router vuelve a cambiar la IP origen por su IP Pública (220.16.16.5), pero asigna un <b>NUEVO PUERTO (3300)</b>. Así distingue esta conexión de la del Host 1. Esto es PAT (Port Address Translation).",
+                table: [
+                    { priv: '192.168.50.50:12002', pub: '220.16.16.5:3000', dest: '98.10.10.5:80' },
+                    { priv: '192.168.50.6:22986', pub: '220.16.16.5:3300', dest: '98.10.10.5:80' }
+                ],
+                packet: { from: 'router', to: 'serverWeb', src: '220.16.16.5:3300', dst: '98.10.10.5:80', color: 'border-indigo-400' }
+            },
+            {
+                title: "Paso 7: Conexión simultánea a FTP",
+                desc: "Mientras tanto, el Host 2 abre otra conexión paralela, esta vez dirigida hacia el Servidor FTP (puerto 21).",
+                table: [
+                    { priv: '192.168.50.50:12002', pub: '220.16.16.5:3000', dest: '98.10.10.5:80' },
+                    { priv: '192.168.50.6:22986', pub: '220.16.16.5:3300', dest: '98.10.10.5:80' }
+                ],
+                packet: { from: 'host2', to: 'router', src: '192.168.50.6:8931', dst: '99.12.18.6:21', color: 'border-blue-300' }
+            },
+            {
+                title: "Paso 8: Tabla NAT/PAT Completada",
+                desc: "El Router añade una tercera entrada asignando el puerto 4000. La tabla ahora multiplexa de forma segura 3 conexiones distintas utilizando 1 sola IP Pública y 3 puertos diferentes.",
+                table: [
+                    { priv: '192.168.50.50:12002', pub: '220.16.16.5:3000', dest: '98.10.10.5:80' },
+                    { priv: '192.168.50.6:22986', pub: '220.16.16.5:3300', dest: '98.10.10.5:80' },
+                    { priv: '192.168.50.6:8931', pub: '220.16.16.5:4000', dest: '99.12.18.6:21' }
+                ],
+                packet: { from: 'router', to: 'serverFtp', src: '220.16.16.5:4000', dst: '99.12.18.6:21', color: 'border-indigo-400' }
+            }
+        ];
+
+        let currentStep = 0;
+        
+        // Elementos DOM
+        const elTitle = document.getElementById('stepTitle');
+        const elDesc = document.getElementById('stepDesc');
+        const elCounter = document.getElementById('stepCounter');
+        const tbody = document.getElementById('natTableBody');
+        const emptyMsg = document.getElementById('emptyTableMsg');
+        
+        const btnPrev = document.getElementById('btnPrev');
+        const btnNext = document.getElementById('btnNext');
+        const btnReset = document.getElementById('btnReset');
+        
+        const packet = document.getElementById('packet');
+        const pktSrc = document.getElementById('pktSrc');
+        const pktDst = document.getElementById('pktDst');
+        const diagramContainer = document.getElementById('diagramContainer');
+
+        function updateUI() {
+            const step = stepsData[currentStep];
+            
+            // Textos
+            elCounter.innerText = `Paso ${currentStep} de ${stepsData.length - 1}`;
+            elTitle.innerText = step.title;
+            elDesc.innerHTML = step.desc; // Usar innerHTML por las etiquetas <b>
+
+            // Botones
+            btnPrev.disabled = currentStep === 0;
+            btnNext.disabled = currentStep === stepsData.length - 1;
+
+            // Renderizar Tabla
+            renderTable(step.table);
+
+            // Animar Paquete
+            handlePacket(step.packet);
+        }
+
+        function renderTable(tableData) {
+            tbody.innerHTML = '';
+            
+            if (tableData.length === 0) {
+                emptyMsg.style.display = 'block';
+            } else {
+                emptyMsg.style.display = 'none';
+                tableData.forEach((row, index) => {
+                    const tr = document.createElement('tr');
+                    // Añadir clase de animación si es la última fila insertada
+                    if (index === tableData.length - 1 && currentStep > 0) {
+                        tr.className = 'new-row';
+                    }
+                    tr.innerHTML = `
+                        <td class="px-3 py-2 text-blue-700 font-medium">${row.priv}</td>
+                        <td class="px-3 py-2 border-x border-gray-100 text-indigo-700 font-bold bg-indigo-50/50">${row.pub}</td>
+                        <td class="px-3 py-2 text-gray-700">${row.dest}</td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+            }
+        }
+
+        function getCenterCoords(elementId) {
+            const el = document.getElementById(elementId);
+            const containerRect = diagramContainer.getBoundingClientRect();
+            const elRect = el.getBoundingClientRect();
+            
+            return {
+                x: elRect.left - containerRect.left + (elRect.width / 2),
+                y: elRect.top - containerRect.top + (elRect.height / 2)
+            };
+        }
+
+        function handlePacket(pktData) {
+            if (!pktData) {
+                packet.style.opacity = '0';
+                return;
+            }
+
+            // Eliminar clases de borde antiguas
+            packet.className = packet.className.replace(/border-\w+-\d+/g, '');
+            // Añadir nuevo color de borde si existe
+            if (pktData.color) {
+                packet.classList.add(pktData.color);
+            } else {
+                packet.classList.add('border-gray-400'); // Default
+            }
+
+            // Establecer datos
+            pktSrc.innerText = pktData.src;
+            pktDst.innerText = pktData.dst;
+
+            // Mostrar y resetear transición para colocar en punto de partida
+            packet.style.transition = 'none';
+            packet.style.opacity = '1';
+            
+            const startCoords = getCenterCoords(pktData.from);
+            const endCoords = getCenterCoords(pktData.to);
+            
+            // Asumiendo que el ancho del paquete es fijo por w-48 (192px)
+            const pktWidth = 192; 
+            const pktHeight = 80;
+
+            // Colocar en punto inicio
+            packet.style.transform = `translate(${startCoords.x - pktWidth/2}px, ${startCoords.y - pktHeight/2}px) scale(0.8)`;
+            
+            // Forzar reflow
+            void packet.offsetWidth;
+
+            // Añadir transición y mover al destino
+            packet.style.transition = 'transform 1.5s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.3s';
+            packet.style.transform = `translate(${endCoords.x - pktWidth/2}px, ${endCoords.y - pktHeight/2}px) scale(1)`;
+        }
+
+        // Event Listeners
+        btnNext.addEventListener('click', () => {
+            if (currentStep < stepsData.length - 1) {
+                currentStep++;
+                updateUI();
+            }
+        });
+
+        btnPrev.addEventListener('click', () => {
+            if (currentStep > 0) {
+                currentStep--;
+                updateUI();
+            }
+        });
+
+        btnReset.addEventListener('click', () => {
+            currentStep = 0;
+            updateUI();
+        });
+
+        // Recalcular posicion si la ventana cambia de tamaño
+        window.addEventListener('resize', () => {
+            if(stepsData[currentStep].packet){
+                // Solo reubicamos al destino final sin animación para no romper el layout
+                const pktData = stepsData[currentStep].packet;
+                const endCoords = getCenterCoords(pktData.to);
+                const pktWidth = 192; 
+                const pktHeight = 80;
+                packet.style.transition = 'none';
+                packet.style.transform = `translate(${endCoords.x - pktWidth/2}px, ${endCoords.y - pktHeight/2}px) scale(1)`;
+            }
+        });
+
+        // Inicializar
+        updateUI();
+
+    </script>
+</body>
+</html>
