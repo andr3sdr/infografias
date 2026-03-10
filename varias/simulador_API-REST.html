@@ -1,0 +1,589 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Animación API REST - El Café Digital</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500&family=Inter:wght@300;400;600&display=swap');
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #0f172a; /* slate-900 */
+            color: #f8fafc; /* slate-50 */
+            overflow-x: hidden;
+        }
+
+        .code-font {
+            font-family: 'Fira Code', monospace;
+        }
+
+        /* Contenedor de la animación principal */
+        #animation-canvas {
+            position: relative;
+            width: 100%;
+            height: 300px;
+            background: linear-gradient(to bottom, #1e293b, #0f172a);
+            border-radius: 1rem;
+            border: 1px solid #334155;
+            overflow: hidden;
+        }
+
+        /* Nodos de la metáfora */
+        .node {
+            position: absolute;
+            top: 50%;
+            transform: translate(-50%, -50%);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 10;
+        }
+
+        .node-icon {
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 2rem;
+            box-shadow: 0 0 20px rgba(0,0,0,0.5);
+            background-color: #1e293b;
+            border: 4px solid #475569;
+            transition: all 0.3s ease;
+        }
+
+        .node-icon.active {
+            border-color: #3b82f6; /* blue-500 */
+            box-shadow: 0 0 30px rgba(59, 130, 246, 0.6);
+            transform: scale(1.1);
+        }
+
+        #node-client { left: 15%; }
+        #node-api { left: 50%; }
+        #node-db { left: 85%; }
+
+        /* Conexiones (Cables) */
+        .connection-line {
+            position: absolute;
+            top: 50%;
+            height: 4px;
+            background-color: #334155;
+            z-index: 1;
+            transform: translateY(-50%);
+        }
+        
+        .connection-line::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(90deg, transparent, rgba(59, 130, 246, 0.5), transparent);
+            transform: translateX(-100%);
+            animation: pulse-line 2s infinite linear;
+            display: none; /* Se activa con JS */
+        }
+        
+        .connection-line.active::after {
+            display: block;
+        }
+
+        @keyframes pulse-line {
+            100% { transform: translateX(100%); }
+        }
+
+        #line-1 { left: 15%; width: 35%; }
+        #line-2 { left: 50%; width: 35%; }
+
+        /* El Paquete de Datos (Request/Response) */
+        .data-packet {
+            position: absolute;
+            top: 50%;
+            transform: translate(-50%, -50%);
+            padding: 8px 12px;
+            border-radius: 8px;
+            font-weight: bold;
+            font-size: 0.85rem;
+            z-index: 20;
+            transition: left 1s ease-in-out, opacity 0.3s;
+            opacity: 0;
+            pointer-events: none;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.4);
+        }
+
+        .packet-request {
+            background-color: #3b82f6; /* Blue */
+            color: white;
+            border: 2px solid #60a5fa;
+        }
+
+        .packet-response-ok {
+            background-color: #10b981; /* Green */
+            color: white;
+            border: 2px solid #34d399;
+        }
+
+        .packet-response-error {
+            background-color: #ef4444; /* Red */
+            color: white;
+            border: 2px solid #f87171;
+        }
+
+        /* Consola de logs */
+        #console-output {
+            scrollbar-width: thin;
+            scrollbar-color: #475569 #1e293b;
+        }
+        
+        #console-output::-webkit-scrollbar {
+            width: 8px;
+        }
+        #console-output::-webkit-scrollbar-track {
+            background: #1e293b; 
+        }
+        #console-output::-webkit-scrollbar-thumb {
+            background-color: #475569; 
+            border-radius: 4px;
+        }
+
+        .log-entry {
+            animation: fadeIn 0.3s ease-in;
+            border-left: 3px solid transparent;
+        }
+        .log-req { border-left-color: #3b82f6; }
+        .log-res-200 { border-left-color: #10b981; }
+        .log-res-400 { border-left-color: #ef4444; }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(5px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* Loader base de datos */
+        .spin { animation: spin 1s linear infinite; }
+        @keyframes spin { 100% { transform: rotate(360deg); } }
+    </style>
+</head>
+<body class="p-6 min-h-screen flex flex-col max-w-6xl mx-auto">
+
+    <!-- Cabecera -->
+    <header class="mb-8 text-center">
+        <h1 class="text-3xl font-bold text-white mb-2"><i class="fa-solid fa-network-wired text-blue-500 mr-3"></i>Cómo funciona un Endpoint API REST</h1>
+        <p class="text-slate-400 text-lg">Metáfora del <span class="text-yellow-400 font-semibold"><i class="fa-solid fa-mug-hot"></i> Café Digital</span>: Interactúa con los botones para ver el flujo de datos HTTP.</p>
+    </header>
+
+    <!-- Panel de Control y Animación -->
+    <main class="grid grid-cols-1 lg:grid-cols-4 gap-6 mb-6">
+        
+        <!-- Controles (Izquierda) -->
+        <div class="col-span-1 bg-slate-800 p-5 rounded-xl border border-slate-700 shadow-xl flex flex-col gap-4">
+            
+            <!-- NUEVO: Controles Paso a Paso -->
+            <div class="mb-2 bg-slate-900/80 p-4 rounded-lg border border-slate-700">
+                <div class="flex items-center justify-between mb-3">
+                    <span class="text-sm text-slate-300 font-semibold"><i class="fa-solid fa-shoe-prints mr-2 text-slate-400"></i>Paso a Paso</span>
+                    <label class="relative inline-flex items-center cursor-pointer">
+                      <input type="checkbox" id="mode-toggle" class="sr-only peer" onchange="toggleStepMode()">
+                      <div class="w-9 h-5 bg-slate-600 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-500"></div>
+                    </label>
+                </div>
+                <button id="btn-next-step" onclick="nextStep()" disabled class="w-full bg-slate-700 text-white text-sm font-bold py-2 px-4 rounded opacity-50 cursor-not-allowed transition duration-300 flex justify-center items-center">
+                    Siguiente <i class="fa-solid fa-forward-step ml-2"></i>
+                </button>
+            </div>
+
+            <h2 class="text-xl font-semibold mb-2 border-b border-slate-600 pb-2">1. Haz un Pedido</h2>
+            
+            <button onclick="triggerApiCall('GET')" class="btn-api w-full text-left bg-slate-700 hover:bg-slate-600 border border-slate-500 p-3 rounded-lg transition group" id="btn-get">
+                <div class="flex items-center justify-between mb-1">
+                    <span class="font-bold text-blue-400">GET</span>
+                    <span class="text-xs bg-slate-800 px-2 py-1 rounded text-slate-300 group-hover:bg-slate-900">Ver Menú</span>
+                </div>
+                <div class="code-font text-xs text-slate-300">/api/v1/menu</div>
+            </button>
+
+            <button onclick="triggerApiCall('POST')" class="btn-api w-full text-left bg-slate-700 hover:bg-slate-600 border border-slate-500 p-3 rounded-lg transition group" id="btn-post">
+                <div class="flex items-center justify-between mb-1">
+                    <span class="font-bold text-green-400">POST</span>
+                    <span class="text-xs bg-slate-800 px-2 py-1 rounded text-slate-300 group-hover:bg-slate-900">Pedir Café</span>
+                </div>
+                <div class="code-font text-xs text-slate-300">/api/v1/pedidos</div>
+            </button>
+
+            <button onclick="triggerApiCall('DELETE')" class="btn-api w-full text-left bg-slate-700 hover:bg-slate-600 border border-slate-500 p-3 rounded-lg transition group" id="btn-delete">
+                <div class="flex items-center justify-between mb-1">
+                    <span class="font-bold text-red-400">DELETE</span>
+                    <span class="text-xs bg-slate-800 px-2 py-1 rounded text-slate-300 group-hover:bg-slate-900">Cancelar</span>
+                </div>
+                <div class="code-font text-xs text-slate-300">/api/v1/pedidos/101</div>
+            </button>
+            
+            <div class="mt-auto pt-4 text-xs text-slate-400 italic text-center">
+                El Cliente inicia la solicitud (Request)
+            </div>
+        </div>
+
+        <!-- Canvas de Animación (Derecha/Centro) -->
+        <div class="col-span-1 lg:col-span-3 flex flex-col gap-4">
+            <div id="animation-canvas" class="shadow-2xl">
+                <!-- Cables -->
+                <div id="line-1" class="connection-line"></div>
+                <div id="line-2" class="connection-line"></div>
+
+                <!-- Nodos -->
+                <div id="node-client" class="node">
+                    <div class="text-slate-300 font-semibold mb-2 text-sm">📱 Cliente (App)</div>
+                    <div class="node-icon" id="icon-client">
+                        <i class="fa-solid fa-mobile-screen-button text-blue-400"></i>
+                    </div>
+                </div>
+
+                <div id="node-api" class="node">
+                    <div class="text-slate-300 font-semibold mb-2 text-sm">🤖 Servidor (API)</div>
+                    <div class="node-icon" id="icon-api">
+                        <i class="fa-solid fa-server text-purple-400"></i>
+                    </div>
+                    <div id="api-status" class="mt-2 text-xs code-font text-purple-300 bg-purple-900/50 px-2 py-1 rounded opacity-0 transition-opacity">Escuchando...</div>
+                </div>
+
+                <div id="node-db" class="node">
+                    <div class="text-slate-300 font-semibold mb-2 text-sm">🍳 BD (Cocina)</div>
+                    <div class="node-icon" id="icon-db">
+                        <i class="fa-solid fa-database text-yellow-400" id="icon-db-inner"></i>
+                    </div>
+                    <div id="db-status" class="mt-2 text-xs code-font text-yellow-300 bg-yellow-900/50 px-2 py-1 rounded opacity-0 transition-opacity">Guardando...</div>
+                </div>
+
+                <!-- El paquete animado (Se genera dinámicamente) -->
+                <div id="data-packet" class="data-packet">
+                    <i class="fa-solid fa-envelope"></i>
+                    <span id="packet-text">{}</span>
+                </div>
+            </div>
+
+            <!-- Inspectores de Datos -->
+            <div class="grid grid-cols-2 gap-4 h-full">
+                <div class="bg-slate-800 rounded-xl border border-slate-700 flex flex-col overflow-hidden">
+                    <div class="bg-slate-900 px-4 py-2 border-b border-slate-700 text-sm font-semibold text-slate-300 flex justify-between">
+                        <span><i class="fa-solid fa-arrow-up-right-from-square mr-2 text-blue-400"></i>Solicitud HTTP (Request)</span>
+                    </div>
+                    <pre id="request-inspector" class="code-font text-xs p-4 text-slate-300 h-full m-0 overflow-y-auto whitespace-pre-wrap flex-grow">Esperando acción del usuario...</pre>
+                </div>
+
+                <div class="bg-slate-800 rounded-xl border border-slate-700 flex flex-col overflow-hidden">
+                    <div class="bg-slate-900 px-4 py-2 border-b border-slate-700 text-sm font-semibold text-slate-300 flex justify-between">
+                        <span><i class="fa-solid fa-arrow-down-left-from-square mr-2 text-green-400"></i>Respuesta HTTP (Response)</span>
+                    </div>
+                    <pre id="response-inspector" class="code-font text-xs p-4 text-slate-300 h-full m-0 overflow-y-auto whitespace-pre-wrap flex-grow">Esperando respuesta del servidor...</pre>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Terminal/Log Inferior -->
+    <footer class="bg-slate-900 rounded-xl border border-slate-700 shadow-xl overflow-hidden flex flex-col" style="height: 200px;">
+        <div class="bg-black/50 px-4 py-2 border-b border-slate-700 flex justify-between items-center">
+            <span class="text-xs font-bold text-slate-400 code-font">Terminal / Log de Red</span>
+            <button onclick="clearLogs()" class="text-xs text-slate-500 hover:text-white transition"><i class="fa-solid fa-trash mr-1"></i>Limpiar</button>
+        </div>
+        <div id="console-output" class="p-4 flex-grow overflow-y-auto code-font text-xs flex flex-col gap-2">
+            <div class="text-slate-500 italic">-- Sistema API REST Iniciado --</div>
+        </div>
+    </footer>
+
+    <script>
+        // Variables de la interfaz
+        const packet = document.getElementById('data-packet');
+        const packetText = document.getElementById('packet-text');
+        const reqInspector = document.getElementById('request-inspector');
+        const resInspector = document.getElementById('response-inspector');
+        const consoleOutput = document.getElementById('console-output');
+        
+        const line1 = document.getElementById('line-1');
+        const line2 = document.getElementById('line-2');
+        
+        let isAnimating = false;
+        
+        // NUEVAS VARIABLES: Lógica paso a paso
+        let isStepByStep = false;
+        let nextStepResolve = null;
+
+        function toggleStepMode() {
+            isStepByStep = document.getElementById('mode-toggle').checked;
+            // Si el usuario desactiva el modo mientras estaba pausado, continuamos automáticamente
+            if(!isStepByStep && nextStepResolve) {
+                nextStep();
+            }
+        }
+
+        function nextStep() {
+            if (nextStepResolve) {
+                nextStepResolve();
+                nextStepResolve = null;
+            }
+        }
+
+        async function smartPause() {
+            if (isStepByStep) {
+                const btn = document.getElementById('btn-next-step');
+                btn.disabled = false;
+                btn.classList.remove('opacity-50', 'cursor-not-allowed', 'bg-slate-700');
+                btn.classList.add('animate-pulse', 'bg-blue-600', 'hover:bg-blue-500', 'shadow-[0_0_15px_rgba(37,99,235,0.5)]');
+                
+                // Pausamos la ejecución esperando a que se resuelva la promesa (al hacer clic)
+                await new Promise(resolve => { nextStepResolve = resolve; });
+                
+                btn.disabled = true;
+                btn.classList.add('opacity-50', 'cursor-not-allowed', 'bg-slate-700');
+                btn.classList.remove('animate-pulse', 'bg-blue-600', 'hover:bg-blue-500', 'shadow-[0_0_15px_rgba(37,99,235,0.5)]');
+            }
+        }
+
+        // Definición de las APIs simuladas
+        const apiDefinitions = {
+            'GET': {
+                method: 'GET',
+                url: 'https://api.cafedigital.com/v1/menu',
+                route: '/v1/menu',
+                body: null,
+                headers: { 'Authorization': 'Bearer token123' },
+                description: 'El cliente pide consultar el menú.',
+                dbAction: 'SELECT * FROM menu',
+                responseStatus: '200 OK',
+                responseBody: {
+                    "items": [
+                        {"id": 1, "nombre": "Espresso", "precio": 2.50},
+                        {"id": 2, "nombre": "Latte", "precio": 3.00}
+                    ]
+                }
+            },
+            'POST': {
+                method: 'POST',
+                url: 'https://api.cafedigital.com/v1/pedidos',
+                route: '/v1/pedidos',
+                body: {
+                    "item_id": 2,
+                    "tamaño": "grande",
+                    "azucar": false
+                },
+                headers: { 
+                    'Authorization': 'Bearer token123',
+                    'Content-Type': 'application/json'
+                },
+                description: 'El cliente envía datos para crear un nuevo pedido.',
+                dbAction: 'INSERT INTO pedidos...',
+                responseStatus: '201 Created',
+                responseBody: {
+                    "mensaje": "Pedido recibido",
+                    "pedido_id": 101,
+                    "estado": "en_preparacion"
+                }
+            },
+            'DELETE': {
+                method: 'DELETE',
+                url: 'https://api.cafedigital.com/v1/pedidos/101',
+                route: '/v1/pedidos/101',
+                body: null,
+                headers: { 'Authorization': 'Bearer token123' },
+                description: 'El cliente solicita eliminar (cancelar) un pedido existente.',
+                dbAction: 'DELETE FROM pedidos WHERE id=101',
+                responseStatus: '200 OK', // o 204 No Content, usamos 200 para mostrar JSON
+                responseBody: {
+                    "mensaje": "Pedido 101 cancelado exitosamente."
+                }
+            }
+        };
+
+        // Función principal de simulación
+        async function triggerApiCall(type) {
+            if (isAnimating) return;
+            isAnimating = true;
+
+            const apiData = apiDefinitions[type];
+            
+            // 1. Preparar UI
+            resetUI();
+            disableButtons(true);
+            
+            // Actualizar Inspector de Request
+            let reqText = `${apiData.method} ${apiData.route} HTTP/1.1\nHost: api.cafedigital.com\n`;
+            for(const [k,v] of Object.entries(apiData.headers)) reqText += `${k}: ${v}\n`;
+            if(apiData.body) reqText += `\n${JSON.stringify(apiData.body, null, 2)}`;
+            reqInspector.innerHTML = `<span class="text-${getMethodColor(type)}-400">${reqText}</span>`;
+            
+            logToConsole(`Iniciando petición ${apiData.method} a ${apiData.route}...`, 'log-req');
+            await smartPause(); // PAUSA: Inspeccionar Request
+
+            // 2. Animar Cliente -> API (El Request)
+            setActiveNode('client', true);
+            line1.classList.add('active');
+            
+            setupPacket(apiData.method, type === 'POST' ? '{ JSON }' : 'Params', 'packet-request', '15%');
+            await sleep(100);
+            
+            packet.style.opacity = 1;
+            packet.style.left = '50%'; // Mover al servidor
+            await sleep(1000); // Tiempo de viaje de red
+            await smartPause(); // PAUSA: El paquete llega a la API
+            
+            line1.classList.remove('active');
+            setActiveNode('client', false);
+            
+            // 3. Procesamiento en la API (Enrutamiento)
+            setActiveNode('api', true);
+            packet.style.opacity = 0; // Se mete al servidor
+            showNodeStatus('api', `Enrutando: ${apiData.route}`);
+            logToConsole(`[API Gateway] Recibido. Validando endpoint y token...`, 'text-purple-400');
+            await sleep(800);
+            await smartPause(); // PAUSA: API procesa y valida
+            showNodeStatus('api', '');
+            
+            // 4. API -> Base de Datos (Backend Logic)
+            line2.classList.add('active');
+            setupPacket('SQL', apiData.method, 'packet-request', '50%'); // Paquete interno
+            packet.style.opacity = 1;
+            packet.style.left = '85%'; // Mover a la BD
+            await sleep(1000);
+            await smartPause(); // PAUSA: La instrucción llega a la BD
+            
+            line2.classList.remove('active');
+            setActiveNode('api', false);
+
+            // 5. Procesamiento en la BD
+            setActiveNode('db', true);
+            packet.style.opacity = 0;
+            document.getElementById('icon-db-inner').classList.add('spin');
+            showNodeStatus('db', apiData.dbAction);
+            logToConsole(`[Cocina/BD] Ejecutando: ${apiData.dbAction}`, 'text-yellow-400');
+            await sleep(1200);
+            await smartPause(); // PAUSA: BD termina de ejecutar
+            document.getElementById('icon-db-inner').classList.remove('spin');
+            showNodeStatus('db', '');
+            setActiveNode('db', false);
+
+            // 6. Base de Datos -> API -> Cliente (La Respuesta)
+            // BD -> API
+            line2.classList.add('active');
+            setupPacket(apiData.responseStatus.split(' ')[0], 'Datos', 'packet-response-ok', '85%');
+            packet.style.opacity = 1;
+            packet.style.left = '50%';
+            await sleep(1000);
+            await smartPause(); // PAUSA: Los datos vuelven a la API
+            line2.classList.remove('active');
+            
+            // API -> Cliente
+            setActiveNode('api', true);
+            logToConsole(`[API Gateway] Generando respuesta HTTP...`, 'text-purple-400');
+            await sleep(500);
+            await smartPause(); // PAUSA: API lista para devolver Response
+            setActiveNode('api', false);
+            line1.classList.add('active');
+            packet.style.left = '15%'; // Llega al cliente
+            await sleep(1000);
+            line1.classList.remove('active');
+            packet.style.opacity = 0;
+
+            // 7. Fin - Mostrar Respuesta
+            setActiveNode('client', true);
+            const statusColor = apiData.responseStatus.startsWith('2') ? 'green' : 'red';
+            let resText = `HTTP/1.1 ${apiData.responseStatus}\nContent-Type: application/json\n\n`;
+            resText += JSON.stringify(apiData.responseBody, null, 2);
+            resInspector.innerHTML = `<span class="text-${statusColor}-400">${resText}</span>`;
+            
+            logToConsole(`Respuesta recibida: ${apiData.responseStatus}`, apiData.responseStatus.startsWith('2') ? 'log-res-200' : 'log-res-400');
+            
+            await sleep(500);
+            setActiveNode('client', false);
+            disableButtons(false);
+            isAnimating = false;
+        }
+
+        // Funciones auxiliares
+        function sleep(ms) {
+            return new Promise(resolve => setTimeout(resolve, ms));
+        }
+
+        function resetUI() {
+            resInspector.innerHTML = '<span class="text-slate-500">Esperando respuesta del servidor...</span>';
+            packet.style.opacity = 0;
+            packet.className = 'data-packet';
+            document.querySelectorAll('.node-icon').forEach(el => el.classList.remove('active'));
+        }
+
+        function disableButtons(disabled) {
+            document.querySelectorAll('.btn-api').forEach(btn => {
+                btn.disabled = disabled;
+                if(disabled) btn.classList.add('opacity-50', 'cursor-not-allowed');
+                else btn.classList.remove('opacity-50', 'cursor-not-allowed');
+            });
+        }
+
+        function setupPacket(iconText, detailText, cssClass, startPos) {
+            packet.className = `data-packet ${cssClass}`;
+            let icon = 'fa-envelope';
+            if(iconText === 'GET') icon = 'fa-eye';
+            if(iconText === 'POST') icon = 'fa-paper-plane';
+            if(iconText === 'DELETE') icon = 'fa-trash';
+            if(iconText === 'SQL') icon = 'fa-database';
+            if(iconText.startsWith('2')) icon = 'fa-check-circle';
+            
+            packetText.innerHTML = `<i class="fa-solid ${icon} mr-1"></i> ${iconText} <span class="text-xs opacity-75 ml-1">[${detailText}]</span>`;
+            
+            packet.style.transition = 'none'; // Desactivar transición para salto instantáneo
+            packet.style.left = startPos;
+            
+            // Forzar reflow
+            void packet.offsetWidth;
+            
+            packet.style.transition = 'left 1s ease-in-out, opacity 0.2s'; // Reactivar
+        }
+
+        function setActiveNode(nodeId, active) {
+            const el = document.getElementById(`icon-${nodeId}`);
+            if(active) el.classList.add('active');
+            else el.classList.remove('active');
+        }
+
+        function showNodeStatus(nodeId, text) {
+            const el = document.getElementById(`${nodeId}-status`);
+            if(text) {
+                el.innerText = text;
+                el.style.opacity = 1;
+            } else {
+                el.style.opacity = 0;
+            }
+        }
+
+        function logToConsole(message, cssClass = '') {
+            const time = new Date().toLocaleTimeString();
+            const div = document.createElement('div');
+            div.className = `log-entry bg-slate-800/50 p-2 rounded ${cssClass}`;
+            div.innerHTML = `<span class="text-slate-500 mr-2">[${time}]</span> ${message}`;
+            consoleOutput.appendChild(div);
+            consoleOutput.scrollTop = consoleOutput.scrollHeight;
+        }
+
+        function clearLogs() {
+            consoleOutput.innerHTML = '<div class="text-slate-500 italic">-- Terminal limpiada --</div>';
+        }
+
+        function getMethodColor(method) {
+            switch(method) {
+                case 'GET': return 'blue';
+                case 'POST': return 'green';
+                case 'DELETE': return 'red';
+                default: return 'slate';
+            }
+        }
+    </script>
+</body>
+</html>
