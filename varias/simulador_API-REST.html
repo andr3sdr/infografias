@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Animación API REST - El Café Digital</title>
+    <title>Animación API REST - El Café Digital (Multicliente)</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <style>
@@ -24,7 +24,7 @@
         #animation-canvas {
             position: relative;
             width: 100%;
-            height: 300px;
+            height: 380px; /* Un poco más alto para acomodar dos clientes */
             background: linear-gradient(to bottom, #1e293b, #0f172a);
             border-radius: 1rem;
             border: 1px solid #334155;
@@ -34,7 +34,6 @@
         /* Nodos de la metáfora */
         .node {
             position: absolute;
-            top: 50%;
             transform: translate(-50%, -50%);
             display: flex;
             flex-direction: column;
@@ -44,13 +43,13 @@
         }
 
         .node-icon {
-            width: 80px;
-            height: 80px;
+            width: 70px;
+            height: 70px;
             border-radius: 50%;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 2rem;
+            font-size: 1.8rem;
             box-shadow: 0 0 20px rgba(0,0,0,0.5);
             background-color: #1e293b;
             border: 4px solid #475569;
@@ -59,59 +58,41 @@
 
         .node-icon.active {
             border-color: #3b82f6; /* blue-500 */
-            box-shadow: 0 0 30px rgba(59, 130, 246, 0.6);
+            box-shadow: 0 0 30px rgba(59, 130, 246, 0.8);
             transform: scale(1.1);
         }
 
-        #node-client { left: 15%; }
-        #node-api { left: 50%; }
-        #node-db { left: 85%; }
+        /* Posiciones de los Nodos */
+        #node-app { top: 25%; left: 15%; }
+        #node-web { top: 75%; left: 15%; }
+        #node-api { top: 50%; left: 50%; }
+        #node-db  { top: 50%; left: 85%; }
 
-        /* Conexiones (Cables) */
-        .connection-line {
-            position: absolute;
-            top: 50%;
-            height: 4px;
-            background-color: #334155;
-            z-index: 1;
-            transform: translateY(-50%);
+        /* Conexiones (Cables SVG) */
+        .svg-line {
+            transition: stroke 0.4s ease, filter 0.4s ease;
         }
         
-        .connection-line::after {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: linear-gradient(90deg, transparent, rgba(59, 130, 246, 0.5), transparent);
-            transform: translateX(-100%);
-            animation: pulse-line 2s infinite linear;
-            display: none; /* Se activa con JS */
-        }
-        
-        .connection-line.active::after {
-            display: block;
+        .svg-line.active {
+            stroke: #3b82f6;
+            filter: drop-shadow(0 0 6px rgba(59, 130, 246, 0.8));
         }
 
-        @keyframes pulse-line {
-            100% { transform: translateX(100%); }
+        .svg-line.active-response {
+            stroke: #10b981;
+            filter: drop-shadow(0 0 6px rgba(16, 185, 129, 0.8));
         }
-
-        #line-1 { left: 15%; width: 35%; }
-        #line-2 { left: 50%; width: 35%; }
 
         /* El Paquete de Datos (Request/Response) */
         .data-packet {
             position: absolute;
-            top: 50%;
             transform: translate(-50%, -50%);
             padding: 8px 12px;
             border-radius: 8px;
             font-weight: bold;
             font-size: 0.85rem;
             z-index: 20;
-            transition: left 1s ease-in-out, opacity 0.3s;
+            transition: left 1s ease-in-out, top 1s ease-in-out, opacity 0.3s;
             opacity: 0;
             pointer-events: none;
             display: flex;
@@ -171,14 +152,22 @@
         /* Loader base de datos */
         .spin { animation: spin 1s linear infinite; }
         @keyframes spin { 100% { transform: rotate(360deg); } }
+
+        /* Estilos para los botones de selección de cliente */
+        .client-btn { transition: all 0.2s; }
+        .client-btn.selected {
+            background-color: #2563eb;
+            border-color: #3b82f6;
+            color: white;
+        }
     </style>
 </head>
 <body class="p-6 min-h-screen flex flex-col max-w-6xl mx-auto">
 
     <!-- Cabecera -->
     <header class="mb-8 text-center">
-        <h1 class="text-3xl font-bold text-white mb-2"><i class="fa-solid fa-network-wired text-blue-500 mr-3"></i>Cómo funciona un Endpoint API REST</h1>
-        <p class="text-slate-400 text-lg">Metáfora del <span class="text-yellow-400 font-semibold"><i class="fa-solid fa-mug-hot"></i> Café Digital</span>: Interactúa con los botones para ver el flujo de datos HTTP.</p>
+        <h1 class="text-3xl font-bold text-white mb-2"><i class="fa-solid fa-network-wired text-blue-500 mr-3"></i>API REST: Múltiples Clientes, un Endpoint</h1>
+        <p class="text-slate-400 text-lg">Metáfora del <span class="text-yellow-400 font-semibold"><i class="fa-solid fa-mug-hot"></i> Café Digital</span>: Distintos dispositivos pueden usar la misma lógica del servidor.</p>
     </header>
 
     <!-- Panel de Control y Animación -->
@@ -187,80 +176,109 @@
         <!-- Controles (Izquierda) -->
         <div class="col-span-1 bg-slate-800 p-5 rounded-xl border border-slate-700 shadow-xl flex flex-col gap-4">
             
-            <!-- NUEVO: Controles Paso a Paso -->
-            <div class="mb-2 bg-slate-900/80 p-4 rounded-lg border border-slate-700">
-                <div class="flex items-center justify-between mb-3">
-                    <span class="text-sm text-slate-300 font-semibold"><i class="fa-solid fa-shoe-prints mr-2 text-slate-400"></i>Paso a Paso</span>
-                    <label class="relative inline-flex items-center cursor-pointer">
-                      <input type="checkbox" id="mode-toggle" class="sr-only peer" onchange="toggleStepMode()">
-                      <div class="w-9 h-5 bg-slate-600 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-500"></div>
-                    </label>
+            <!-- Selector de Cliente -->
+            <div class="mb-2">
+                <h2 class="text-sm text-slate-400 font-semibold mb-2 uppercase tracking-wider"><i class="fa-solid fa-users mr-2"></i>1. Selecciona el Cliente</h2>
+                <div class="grid grid-cols-2 gap-2">
+                    <button id="btn-client-app" onclick="selectClient('app')" class="client-btn selected bg-slate-700 hover:bg-slate-600 border border-slate-500 p-2 rounded-lg text-sm font-medium flex flex-col items-center gap-1">
+                        <i class="fa-solid fa-mobile-screen-button text-lg"></i>
+                        <span>App Móvil</span>
+                    </button>
+                    <button id="btn-client-web" onclick="selectClient('web')" class="client-btn bg-slate-700 hover:bg-slate-600 border border-slate-500 p-2 rounded-lg text-sm font-medium text-slate-300 flex flex-col items-center gap-1">
+                        <i class="fa-solid fa-globe text-lg"></i>
+                        <span>Navegador</span>
+                    </button>
                 </div>
-                <button id="btn-next-step" onclick="nextStep()" disabled class="w-full bg-slate-700 text-white text-sm font-bold py-2 px-4 rounded opacity-50 cursor-not-allowed transition duration-300 flex justify-center items-center">
-                    Siguiente <i class="fa-solid fa-forward-step ml-2"></i>
-                </button>
             </div>
 
-            <h2 class="text-xl font-semibold mb-2 border-b border-slate-600 pb-2">1. Haz un Pedido</h2>
-            
-            <button onclick="triggerApiCall('GET')" class="btn-api w-full text-left bg-slate-700 hover:bg-slate-600 border border-slate-500 p-3 rounded-lg transition group" id="btn-get">
-                <div class="flex items-center justify-between mb-1">
-                    <span class="font-bold text-blue-400">GET</span>
-                    <span class="text-xs bg-slate-800 px-2 py-1 rounded text-slate-300 group-hover:bg-slate-900">Ver Menú</span>
-                </div>
-                <div class="code-font text-xs text-slate-300">/api/v1/menu</div>
-            </button>
+            <!-- Botones de Acción HTTP -->
+            <div>
+                <h2 class="text-sm text-slate-400 font-semibold mb-2 uppercase tracking-wider mt-2"><i class="fa-solid fa-paper-plane mr-2"></i>2. Ejecuta la Petición</h2>
+                <div class="space-y-3">
+                    <button onclick="triggerApiCall('GET')" class="btn-action w-full text-left bg-slate-700 hover:bg-slate-600 border border-slate-500 p-3 rounded-lg transition group">
+                        <div class="flex items-center justify-between mb-1">
+                            <span class="font-bold text-blue-400">GET</span>
+                            <span class="text-xs bg-slate-800 px-2 py-1 rounded text-slate-300 group-hover:bg-slate-900">Ver Menú</span>
+                        </div>
+                        <div class="code-font text-xs text-slate-300">/api/v1/menu</div>
+                    </button>
 
-            <button onclick="triggerApiCall('POST')" class="btn-api w-full text-left bg-slate-700 hover:bg-slate-600 border border-slate-500 p-3 rounded-lg transition group" id="btn-post">
-                <div class="flex items-center justify-between mb-1">
-                    <span class="font-bold text-green-400">POST</span>
-                    <span class="text-xs bg-slate-800 px-2 py-1 rounded text-slate-300 group-hover:bg-slate-900">Pedir Café</span>
-                </div>
-                <div class="code-font text-xs text-slate-300">/api/v1/pedidos</div>
-            </button>
+                    <button onclick="triggerApiCall('POST')" class="btn-action w-full text-left bg-slate-700 hover:bg-slate-600 border border-slate-500 p-3 rounded-lg transition group">
+                        <div class="flex items-center justify-between mb-1">
+                            <span class="font-bold text-green-400">POST</span>
+                            <span class="text-xs bg-slate-800 px-2 py-1 rounded text-slate-300 group-hover:bg-slate-900">Pedir Café</span>
+                        </div>
+                        <div class="code-font text-xs text-slate-300">/api/v1/pedidos</div>
+                    </button>
 
-            <button onclick="triggerApiCall('DELETE')" class="btn-api w-full text-left bg-slate-700 hover:bg-slate-600 border border-slate-500 p-3 rounded-lg transition group" id="btn-delete">
-                <div class="flex items-center justify-between mb-1">
-                    <span class="font-bold text-red-400">DELETE</span>
-                    <span class="text-xs bg-slate-800 px-2 py-1 rounded text-slate-300 group-hover:bg-slate-900">Cancelar</span>
+                    <button onclick="triggerApiCall('DELETE')" class="btn-action w-full text-left bg-slate-700 hover:bg-slate-600 border border-slate-500 p-3 rounded-lg transition group">
+                        <div class="flex items-center justify-between mb-1">
+                            <span class="font-bold text-red-400">DELETE</span>
+                            <span class="text-xs bg-slate-800 px-2 py-1 rounded text-slate-300 group-hover:bg-slate-900">Cancelar</span>
+                        </div>
+                        <div class="code-font text-xs text-slate-300">/api/v1/pedidos/101</div>
+                    </button>
                 </div>
-                <div class="code-font text-xs text-slate-300">/api/v1/pedidos/101</div>
-            </button>
+            </div>
             
-            <div class="mt-auto pt-4 text-xs text-slate-400 italic text-center">
-                El Cliente inicia la solicitud (Request)
+            <!-- Controles Paso a Paso -->
+            <div class="mt-auto bg-slate-900/80 p-3 rounded-lg border border-slate-700">
+                <div class="flex items-center justify-between mb-2">
+                    <span class="text-xs text-slate-300 font-semibold"><i class="fa-solid fa-shoe-prints mr-1"></i>Paso a Paso</span>
+                    <label class="relative inline-flex items-center cursor-pointer">
+                      <input type="checkbox" id="mode-toggle" class="sr-only peer" onchange="toggleStepMode()">
+                      <div class="w-7 h-4 bg-slate-600 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-blue-500"></div>
+                    </label>
+                </div>
+                <button id="btn-next-step" onclick="nextStep()" disabled class="w-full bg-slate-700 text-white text-xs font-bold py-1.5 px-2 rounded opacity-50 cursor-not-allowed transition duration-300 flex justify-center items-center">
+                    Siguiente <i class="fa-solid fa-forward-step ml-1"></i>
+                </button>
             </div>
         </div>
 
         <!-- Canvas de Animación (Derecha/Centro) -->
         <div class="col-span-1 lg:col-span-3 flex flex-col gap-4">
             <div id="animation-canvas" class="shadow-2xl">
-                <!-- Cables -->
-                <div id="line-1" class="connection-line"></div>
-                <div id="line-2" class="connection-line"></div>
+                
+                <!-- Cables SVG de Conexión -->
+                <svg class="absolute inset-0 w-full h-full pointer-events-none z-0">
+                    <!-- App -> API -->
+                    <line id="line-app" x1="15%" y1="25%" x2="50%" y2="50%" stroke="#334155" stroke-width="3" stroke-linecap="round" class="svg-line"/>
+                    <!-- Web -> API -->
+                    <line id="line-web" x1="15%" y1="75%" x2="50%" y2="50%" stroke="#334155" stroke-width="3" stroke-linecap="round" class="svg-line"/>
+                    <!-- API -> DB -->
+                    <line id="line-db" x1="50%" y1="50%" x2="85%" y2="50%" stroke="#334155" stroke-width="3" stroke-linecap="round" class="svg-line"/>
+                </svg>
 
                 <!-- Nodos -->
-                <div id="node-client" class="node">
-                    <div class="text-slate-300 font-semibold mb-2 text-sm">📱 Cliente (App)</div>
-                    <div class="node-icon" id="icon-client">
-                        <i class="fa-solid fa-mobile-screen-button text-blue-400"></i>
+                <div id="node-app" class="node">
+                    <div class="text-slate-300 font-semibold mb-2 text-xs text-center bg-slate-800 px-2 py-1 rounded">📱 App Móvil</div>
+                    <div class="node-icon" id="icon-app">
+                        <i class="fa-brands fa-android text-green-400"></i>
+                    </div>
+                </div>
+
+                <div id="node-web" class="node">
+                    <div class="text-slate-300 font-semibold mb-2 text-xs text-center bg-slate-800 px-2 py-1 rounded">💻 Navegador</div>
+                    <div class="node-icon" id="icon-web">
+                        <i class="fa-brands fa-chrome text-yellow-400"></i>
                     </div>
                 </div>
 
                 <div id="node-api" class="node">
-                    <div class="text-slate-300 font-semibold mb-2 text-sm">🤖 Servidor (API)</div>
+                    <div class="text-slate-300 font-semibold mb-2 text-xs text-center bg-slate-800 px-2 py-1 rounded">🤖 Servidor API</div>
                     <div class="node-icon" id="icon-api">
                         <i class="fa-solid fa-server text-purple-400"></i>
                     </div>
-                    <div id="api-status" class="mt-2 text-xs code-font text-purple-300 bg-purple-900/50 px-2 py-1 rounded opacity-0 transition-opacity">Escuchando...</div>
+                    <div id="api-status" class="mt-2 text-[10px] code-font text-purple-300 bg-purple-900/50 px-2 py-1 rounded opacity-0 transition-opacity">Escuchando...</div>
                 </div>
 
                 <div id="node-db" class="node">
-                    <div class="text-slate-300 font-semibold mb-2 text-sm">🍳 BD (Cocina)</div>
+                    <div class="text-slate-300 font-semibold mb-2 text-xs text-center bg-slate-800 px-2 py-1 rounded">🍳 Base de Datos</div>
                     <div class="node-icon" id="icon-db">
-                        <i class="fa-solid fa-database text-yellow-400" id="icon-db-inner"></i>
+                        <i class="fa-solid fa-database text-yellow-500" id="icon-db-inner"></i>
                     </div>
-                    <div id="db-status" class="mt-2 text-xs code-font text-yellow-300 bg-yellow-900/50 px-2 py-1 rounded opacity-0 transition-opacity">Guardando...</div>
+                    <div id="db-status" class="mt-2 text-[10px] code-font text-yellow-300 bg-yellow-900/50 px-2 py-1 rounded opacity-0 transition-opacity">Guardando...</div>
                 </div>
 
                 <!-- El paquete animado (Se genera dinámicamente) -->
@@ -276,53 +294,80 @@
                     <div class="bg-slate-900 px-4 py-2 border-b border-slate-700 text-sm font-semibold text-slate-300 flex justify-between">
                         <span><i class="fa-solid fa-arrow-up-right-from-square mr-2 text-blue-400"></i>Solicitud HTTP (Request)</span>
                     </div>
-                    <pre id="request-inspector" class="code-font text-xs p-4 text-slate-300 h-full m-0 overflow-y-auto whitespace-pre-wrap flex-grow">Esperando acción del usuario...</pre>
+                    <pre id="request-inspector" class="code-font text-[11px] p-4 text-slate-300 h-full m-0 overflow-y-auto whitespace-pre-wrap flex-grow">Esperando acción del usuario...</pre>
                 </div>
 
                 <div class="bg-slate-800 rounded-xl border border-slate-700 flex flex-col overflow-hidden">
                     <div class="bg-slate-900 px-4 py-2 border-b border-slate-700 text-sm font-semibold text-slate-300 flex justify-between">
                         <span><i class="fa-solid fa-arrow-down-left-from-square mr-2 text-green-400"></i>Respuesta HTTP (Response)</span>
                     </div>
-                    <pre id="response-inspector" class="code-font text-xs p-4 text-slate-300 h-full m-0 overflow-y-auto whitespace-pre-wrap flex-grow">Esperando respuesta del servidor...</pre>
+                    <pre id="response-inspector" class="code-font text-[11px] p-4 text-slate-300 h-full m-0 overflow-y-auto whitespace-pre-wrap flex-grow">Esperando respuesta del servidor...</pre>
                 </div>
             </div>
         </div>
     </main>
 
     <!-- Terminal/Log Inferior -->
-    <footer class="bg-slate-900 rounded-xl border border-slate-700 shadow-xl overflow-hidden flex flex-col" style="height: 200px;">
+    <footer class="bg-slate-900 rounded-xl border border-slate-700 shadow-xl overflow-hidden flex flex-col" style="height: 180px;">
         <div class="bg-black/50 px-4 py-2 border-b border-slate-700 flex justify-between items-center">
             <span class="text-xs font-bold text-slate-400 code-font">Terminal / Log de Red</span>
             <button onclick="clearLogs()" class="text-xs text-slate-500 hover:text-white transition"><i class="fa-solid fa-trash mr-1"></i>Limpiar</button>
         </div>
         <div id="console-output" class="p-4 flex-grow overflow-y-auto code-font text-xs flex flex-col gap-2">
-            <div class="text-slate-500 italic">-- Sistema API REST Iniciado --</div>
+            <div class="text-slate-500 italic">-- Sistema API REST Iniciado. Selecciona un cliente y haz un pedido. --</div>
         </div>
     </footer>
 
     <script>
-        // Variables de la interfaz
+        // Variables UI
         const packet = document.getElementById('data-packet');
         const packetText = document.getElementById('packet-text');
         const reqInspector = document.getElementById('request-inspector');
         const resInspector = document.getElementById('response-inspector');
         const consoleOutput = document.getElementById('console-output');
         
-        const line1 = document.getElementById('line-1');
-        const line2 = document.getElementById('line-2');
-        
         let isAnimating = false;
         
-        // NUEVAS VARIABLES: Lógica paso a paso
+        // Control de Estado del Cliente
+        let activeClientKey = 'app';
+        const clientConfig = {
+            'app': {
+                id: 'app',
+                yPos: '25%', // Posición Y en el Canvas
+                name: 'App Móvil Android',
+                userAgent: 'CafeDigitalApp/2.1 (Android 14; Mobile)'
+            },
+            'web': {
+                id: 'web',
+                yPos: '75%', // Posición Y en el Canvas
+                name: 'Navegador Web',
+                userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64) Chrome/120.0'
+            }
+        };
+
+        // Lógica paso a paso
         let isStepByStep = false;
         let nextStepResolve = null;
 
+        function selectClient(clientId) {
+            if (isAnimating) return; // Bloquear cambio si hay animación
+            activeClientKey = clientId;
+            
+            // Actualizar UI Botones
+            document.querySelectorAll('.client-btn').forEach(btn => {
+                btn.classList.remove('selected', 'text-white');
+                btn.classList.add('text-slate-300');
+            });
+            const activeBtn = document.getElementById(`btn-client-${clientId}`);
+            activeBtn.classList.add('selected', 'text-white');
+            activeBtn.classList.remove('text-slate-300');
+            
+            logToConsole(`Cliente cambiado a: ${clientConfig[clientId].name}`, 'text-slate-400');
+        }
+
         function toggleStepMode() {
             isStepByStep = document.getElementById('mode-toggle').checked;
-            // Si el usuario desactiva el modo mientras estaba pausado, continuamos automáticamente
-            if(!isStepByStep && nextStepResolve) {
-                nextStep();
-            }
+            if(!isStepByStep && nextStepResolve) nextStep();
         }
 
         function nextStep() {
@@ -339,7 +384,6 @@
                 btn.classList.remove('opacity-50', 'cursor-not-allowed', 'bg-slate-700');
                 btn.classList.add('animate-pulse', 'bg-blue-600', 'hover:bg-blue-500', 'shadow-[0_0_15px_rgba(37,99,235,0.5)]');
                 
-                // Pausamos la ejecución esperando a que se resuelva la promesa (al hacer clic)
                 await new Promise(resolve => { nextStepResolve = resolve; });
                 
                 btn.disabled = true;
@@ -352,23 +396,23 @@
         const apiDefinitions = {
             'GET': {
                 method: 'GET',
-                url: 'https://api.cafedigital.com/v1/menu',
                 route: '/v1/menu',
                 body: null,
-                headers: { 'Authorization': 'Bearer token123' },
-                description: 'El cliente pide consultar el menú.',
-                dbAction: 'SELECT * FROM menu',
+                headers: { 
+                    'Accept': 'application/json',
+                    'Authorization': 'Bearer user_token_789' 
+                },
+                dbAction: 'SELECT id, nombre, precio FROM menu',
                 responseStatus: '200 OK',
                 responseBody: {
                     "items": [
                         {"id": 1, "nombre": "Espresso", "precio": 2.50},
-                        {"id": 2, "nombre": "Latte", "precio": 3.00}
+                        {"id": 2, "nombre": "Cappuccino", "precio": 3.20}
                     ]
                 }
             },
             'POST': {
                 method: 'POST',
-                url: 'https://api.cafedigital.com/v1/pedidos',
                 route: '/v1/pedidos',
                 body: {
                     "item_id": 2,
@@ -376,27 +420,24 @@
                     "azucar": false
                 },
                 headers: { 
-                    'Authorization': 'Bearer token123',
-                    'Content-Type': 'application/json'
+                    'Content-Type': 'application/json',
+                    'Authorization': 'Bearer user_token_789'
                 },
-                description: 'El cliente envía datos para crear un nuevo pedido.',
-                dbAction: 'INSERT INTO pedidos...',
+                dbAction: 'INSERT INTO pedidos (item_id, user_id) VALUES...',
                 responseStatus: '201 Created',
                 responseBody: {
-                    "mensaje": "Pedido recibido",
+                    "mensaje": "Pedido recibido en cocina",
                     "pedido_id": 101,
-                    "estado": "en_preparacion"
+                    "estado": "preparando"
                 }
             },
             'DELETE': {
                 method: 'DELETE',
-                url: 'https://api.cafedigital.com/v1/pedidos/101',
                 route: '/v1/pedidos/101',
                 body: null,
-                headers: { 'Authorization': 'Bearer token123' },
-                description: 'El cliente solicita eliminar (cancelar) un pedido existente.',
-                dbAction: 'DELETE FROM pedidos WHERE id=101',
-                responseStatus: '200 OK', // o 204 No Content, usamos 200 para mostrar JSON
+                headers: { 'Authorization': 'Bearer user_token_789' },
+                dbAction: 'UPDATE pedidos SET estado="cancelado" WHERE id=101',
+                responseStatus: '200 OK',
                 responseBody: {
                     "mensaje": "Pedido 101 cancelado exitosamente."
                 }
@@ -409,53 +450,58 @@
             isAnimating = true;
 
             const apiData = apiDefinitions[type];
+            const client = clientConfig[activeClientKey];
             
             // 1. Preparar UI
             resetUI();
-            disableButtons(true);
+            disableControls(true);
             
-            // Actualizar Inspector de Request
-            let reqText = `${apiData.method} ${apiData.route} HTTP/1.1\nHost: api.cafedigital.com\n`;
+            // Construir Texto del Request inyectando el User-Agent dinámico
+            let reqText = `${apiData.method} ${apiData.route} HTTP/1.1\n`;
+            reqText += `Host: api.cafedigital.com\n`;
+            reqText += `User-Agent: ${client.userAgent}\n`; // <-- Inyección clave
             for(const [k,v] of Object.entries(apiData.headers)) reqText += `${k}: ${v}\n`;
             if(apiData.body) reqText += `\n${JSON.stringify(apiData.body, null, 2)}`;
+            
             reqInspector.innerHTML = `<span class="text-${getMethodColor(type)}-400">${reqText}</span>`;
             
-            logToConsole(`Iniciando petición ${apiData.method} a ${apiData.route}...`, 'log-req');
-            await smartPause(); // PAUSA: Inspeccionar Request
+            logToConsole(`[${client.name}] Iniciando petición ${apiData.method}...`, 'log-req');
+            await smartPause(); // PAUSA
 
             // 2. Animar Cliente -> API (El Request)
-            setActiveNode('client', true);
-            line1.classList.add('active');
+            setActiveNode(client.id, true);
+            setLineActive(`line-${client.id}`, true);
             
-            setupPacket(apiData.method, type === 'POST' ? '{ JSON }' : 'Params', 'packet-request', '15%');
-            await sleep(100);
+            setupPacket(apiData.method, type === 'POST' ? '{ JSON }' : 'Params', 'packet-request', '15%', client.yPos);
+            await sleep(50);
             
             packet.style.opacity = 1;
-            packet.style.left = '50%'; // Mover al servidor
-            await sleep(1000); // Tiempo de viaje de red
-            await smartPause(); // PAUSA: El paquete llega a la API
+            packet.style.left = '50%'; 
+            packet.style.top = '50%'; // Mover al servidor (diagonal)
+            await sleep(1000); 
+            await smartPause(); // PAUSA
             
-            line1.classList.remove('active');
-            setActiveNode('client', false);
+            setLineActive(`line-${client.id}`, false);
+            setActiveNode(client.id, false);
             
             // 3. Procesamiento en la API (Enrutamiento)
             setActiveNode('api', true);
-            packet.style.opacity = 0; // Se mete al servidor
+            packet.style.opacity = 0; 
             showNodeStatus('api', `Enrutando: ${apiData.route}`);
-            logToConsole(`[API Gateway] Recibido. Validando endpoint y token...`, 'text-purple-400');
+            logToConsole(`[Servidor] Recibido desde ${activeClientKey.toUpperCase()}. Validando endpoint...`, 'text-purple-400');
             await sleep(800);
-            await smartPause(); // PAUSA: API procesa y valida
+            await smartPause(); // PAUSA
             showNodeStatus('api', '');
             
-            // 4. API -> Base de Datos (Backend Logic)
-            line2.classList.add('active');
-            setupPacket('SQL', apiData.method, 'packet-request', '50%'); // Paquete interno
+            // 4. API -> Base de Datos
+            setLineActive('line-db', true);
+            setupPacket('SQL', apiData.method, 'packet-request', '50%', '50%'); 
             packet.style.opacity = 1;
-            packet.style.left = '85%'; // Mover a la BD
+            packet.style.left = '85%'; 
             await sleep(1000);
-            await smartPause(); // PAUSA: La instrucción llega a la BD
+            await smartPause(); // PAUSA
             
-            line2.classList.remove('active');
+            setLineActive('line-db', false);
             setActiveNode('api', false);
 
             // 5. Procesamiento en la BD
@@ -463,51 +509,52 @@
             packet.style.opacity = 0;
             document.getElementById('icon-db-inner').classList.add('spin');
             showNodeStatus('db', apiData.dbAction);
-            logToConsole(`[Cocina/BD] Ejecutando: ${apiData.dbAction}`, 'text-yellow-400');
+            logToConsole(`[Base Datos] Ejecutando: ${apiData.dbAction}`, 'text-yellow-400');
             await sleep(1200);
-            await smartPause(); // PAUSA: BD termina de ejecutar
+            await smartPause(); // PAUSA
             document.getElementById('icon-db-inner').classList.remove('spin');
             showNodeStatus('db', '');
             setActiveNode('db', false);
 
             // 6. Base de Datos -> API -> Cliente (La Respuesta)
-            // BD -> API
-            line2.classList.add('active');
-            setupPacket(apiData.responseStatus.split(' ')[0], 'Datos', 'packet-response-ok', '85%');
+            setLineActive('line-db', true, true); // Modo success
+            setupPacket(apiData.responseStatus.split(' ')[0], 'Datos', 'packet-response-ok', '85%', '50%');
             packet.style.opacity = 1;
             packet.style.left = '50%';
             await sleep(1000);
-            await smartPause(); // PAUSA: Los datos vuelven a la API
-            line2.classList.remove('active');
+            await smartPause(); // PAUSA
+            setLineActive('line-db', false);
             
             // API -> Cliente
             setActiveNode('api', true);
-            logToConsole(`[API Gateway] Generando respuesta HTTP...`, 'text-purple-400');
+            logToConsole(`[Servidor] Generando JSON HTTP Response...`, 'text-purple-400');
             await sleep(500);
-            await smartPause(); // PAUSA: API lista para devolver Response
+            await smartPause(); // PAUSA
             setActiveNode('api', false);
-            line1.classList.add('active');
-            packet.style.left = '15%'; // Llega al cliente
+            
+            setLineActive(`line-${client.id}`, true, true);
+            packet.style.left = '15%'; 
+            packet.style.top = client.yPos; // Vuelve a su origen (diagonal)
             await sleep(1000);
-            line1.classList.remove('active');
+            setLineActive(`line-${client.id}`, false);
             packet.style.opacity = 0;
 
             // 7. Fin - Mostrar Respuesta
-            setActiveNode('client', true);
+            setActiveNode(client.id, true);
             const statusColor = apiData.responseStatus.startsWith('2') ? 'green' : 'red';
             let resText = `HTTP/1.1 ${apiData.responseStatus}\nContent-Type: application/json\n\n`;
             resText += JSON.stringify(apiData.responseBody, null, 2);
             resInspector.innerHTML = `<span class="text-${statusColor}-400">${resText}</span>`;
             
-            logToConsole(`Respuesta recibida: ${apiData.responseStatus}`, apiData.responseStatus.startsWith('2') ? 'log-res-200' : 'log-res-400');
+            logToConsole(`[${client.name}] Respuesta recibida: ${apiData.responseStatus}`, apiData.responseStatus.startsWith('2') ? 'log-res-200' : 'log-res-400');
             
             await sleep(500);
-            setActiveNode('client', false);
-            disableButtons(false);
+            setActiveNode(client.id, false);
+            disableControls(false);
             isAnimating = false;
         }
 
-        // Funciones auxiliares
+        // --- Funciones auxiliares ---
         function sleep(ms) {
             return new Promise(resolve => setTimeout(resolve, ms));
         }
@@ -519,15 +566,15 @@
             document.querySelectorAll('.node-icon').forEach(el => el.classList.remove('active'));
         }
 
-        function disableButtons(disabled) {
-            document.querySelectorAll('.btn-api').forEach(btn => {
+        function disableControls(disabled) {
+            document.querySelectorAll('.btn-action, .client-btn').forEach(btn => {
                 btn.disabled = disabled;
                 if(disabled) btn.classList.add('opacity-50', 'cursor-not-allowed');
                 else btn.classList.remove('opacity-50', 'cursor-not-allowed');
             });
         }
 
-        function setupPacket(iconText, detailText, cssClass, startPos) {
+        function setupPacket(iconText, detailText, cssClass, startLeft, startTop) {
             packet.className = `data-packet ${cssClass}`;
             let icon = 'fa-envelope';
             if(iconText === 'GET') icon = 'fa-eye';
@@ -536,21 +583,29 @@
             if(iconText === 'SQL') icon = 'fa-database';
             if(iconText.startsWith('2')) icon = 'fa-check-circle';
             
-            packetText.innerHTML = `<i class="fa-solid ${icon} mr-1"></i> ${iconText} <span class="text-xs opacity-75 ml-1">[${detailText}]</span>`;
+            packetText.innerHTML = `<i class="fa-solid ${icon} mr-1"></i> ${iconText} <span class="text-[10px] opacity-75 ml-1">[${detailText}]</span>`;
             
-            packet.style.transition = 'none'; // Desactivar transición para salto instantáneo
-            packet.style.left = startPos;
+            packet.style.transition = 'none'; 
+            packet.style.left = startLeft;
+            packet.style.top = startTop;
             
-            // Forzar reflow
-            void packet.offsetWidth;
+            void packet.offsetWidth; // Force reflow
             
-            packet.style.transition = 'left 1s ease-in-out, opacity 0.2s'; // Reactivar
+            packet.style.transition = 'left 1s ease-in-out, top 1s ease-in-out, opacity 0.2s'; 
         }
 
         function setActiveNode(nodeId, active) {
             const el = document.getElementById(`icon-${nodeId}`);
             if(active) el.classList.add('active');
             else el.classList.remove('active');
+        }
+
+        function setLineActive(lineId, active, isResponse = false) {
+            const line = document.getElementById(lineId);
+            line.classList.remove('active', 'active-response');
+            if(active) {
+                line.classList.add(isResponse ? 'active-response' : 'active');
+            }
         }
 
         function showNodeStatus(nodeId, text) {
